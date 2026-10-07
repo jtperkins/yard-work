@@ -1,0 +1,48 @@
+import type en from '../en/tasks';
+
+const tasks: typeof en = {
+  title: 'Tareas',
+  description_one: '{count} trabajo recurrente de la casa, el jardín y los gatos.',
+  description_other: '{count} trabajos recurrentes de la casa, el jardín y los gatos.',
+  searchLabel: 'Buscar tareas',
+  searchPlaceholder: 'Buscar por nombre, lugar o material…',
+  filterLabel: 'Filtrar por categoría',
+  results_one: '{count} tarea',
+  results_other: '{count} tareas',
+  emptyTitle: 'Ninguna tarea coincide',
+  emptyBody: 'Pruebe con otra palabra o quite los filtros.',
+  groupList: 'Tareas de {category}',
+
+  'detail.back': 'Todas las tareas',
+  'detail.notFoundTitle': 'No se encontró la tarea',
+  'detail.notFoundBody': 'Esa tarea no está en el catálogo. Tal vez le cambiaron el nombre.',
+  'detail.howTo': 'Cómo hacerlo',
+  'detail.steps': 'Pasos',
+  'detail.safety': 'Primero la seguridad',
+  'detail.supplies': 'Materiales',
+  'detail.noSupplies': 'No se necesita nada especial.',
+  'detail.whereToBuy': 'Dónde comprar: {where}',
+  'detail.facts': 'Detalles',
+  'detail.cadence': 'Cada cuánto',
+  'detail.season': 'Temporada',
+  'detail.allYear': 'Todo el año',
+  'detail.who': 'Normalmente lo hace',
+  'detail.time': 'Toma más o menos',
+  'detail.priority': 'Prioridad',
+  'detail.area': 'Dónde',
+  'detail.lastDone': 'Última vez',
+  'detail.nextDue': 'Próxima vez',
+  'detail.never': 'Nunca',
+  'detail.history': 'Historial',
+  'detail.historyList': 'Firmas de esta tarea',
+  'detail.historyShowAll': 'Ver las {count}',
+  'detail.historyEmptyTitle': 'Todavía no hay firmas',
+  'detail.historyEmptyBody': 'Cuando alguien firme esta tarea, aparecerá aquí.',
+  'detail.signedBy': 'Lo hizo {doneBy} · firmó {loggedBy}',
+  'detail.doneBy': 'Lo hizo {doneBy}',
+  'detail.draftTitle': 'Borrador: falta confirmar',
+  'detail.draftBody':
+    'Estos pasos se redactaron para una propiedad húmeda de altura. Revíselos según cómo funciona realmente esta casa y luego marque la tarea como confirmada en data/tasks.json.',
+};
+
+export default tasks;

@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local `wrangler pages dev` (never commit .dev.vars).
+# Shared house code people type to sign in. Use 8+ characters.
+HOUSE_CODE=change-me-please
+# Random secret for signing session cookies (32+ bytes). Generate with:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+SESSION_SECRET=replace-with-a-long-random-string

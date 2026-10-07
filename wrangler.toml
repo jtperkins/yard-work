@@ -1,0 +1,11 @@
+# Cloudflare Pages project config (static Vite build + Pages Functions in ./functions).
+name = "yard-work"
+compatibility_date = "2025-09-01"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "yard-work"
+# Replace after `pnpm dlx wrangler d1 create yard-work` (see README). CI refuses to deploy until then.
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"

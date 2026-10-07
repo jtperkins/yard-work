@@ -1,0 +1,337 @@
+/*
+ * Yard Work design tokens — "field journal".
+ *
+ * Botanical highland: rainforest-green primary, terracotta (Costa Rican tile) accent,
+ * cream paper surfaces and ink text. Dark mode = deep moss / charcoal, following
+ * `prefers-color-scheme` only (no toggle).
+ *
+ * Rules:
+ *  - Components consume ONLY these tokens (via the Tailwind names mapped in `@theme inline`
+ *    below, e.g. `bg-surface text-ink border-line rounded-card shadow-card font-display`).
+ *  - No `dark:` variants: the raw variables swap under the media query instead.
+ *  - Category colours: `--cat-<category-key>` (keys match catalog `Category`), exposed as
+ *    `bg-cat-lawn`, `text-cat-cats`, ... Each has a `-soft` tint for chip backgrounds.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — paper */
+  --paper: #f5efe2; /* page background */
+  --paper-grain: #ece3cf; /* grain speckle colour for the background texture */
+  --surface: #fffaf0; /* cards, sheets */
+  --surface-raised: #ffffff; /* popovers, inputs */
+  --surface-sunken: #ede5d3; /* wells, table stripes, skeletons */
+  --overlay: rgb(31 42 34 / 0.45); /* dialog scrim */
+
+  /* Ink */
+  --ink: #1f2a22;
+  --ink-muted: #545e52;
+  --ink-subtle: #7f8576;
+  --ink-inverse: #f8f3e8;
+
+  /* Lines */
+  --line: #ddd2bc;
+  --line-strong: #bfb197;
+
+  /* Brand */
+  --primary: #2e5b3a; /* rainforest green */
+  --primary-hover: #244a2f;
+  --primary-ink: #f8f3e8; /* text on primary */
+  --primary-soft: #dde8d8;
+  --primary-soft-ink: #1f4229;
+
+  --accent: #b4532c; /* terracotta tile */
+  --accent-hover: #984423;
+  --accent-ink: #fff7ef;
+  --accent-soft: #f4dccd;
+  --accent-soft-ink: #7a3519;
+
+  /* Status tones */
+  --success: #2f7a45;
+  --success-soft: #dcefe0;
+  --success-ink: #1d4f2c;
+  --warning: #b07a12;
+  --warning-soft: #f7eac8;
+  --warning-ink: #6b4a08;
+  --danger: #b3362b;
+  --danger-soft: #f6d9d4;
+  --danger-ink: #7c2119;
+  --info: #2d6a8a;
+  --info-soft: #d7e8f0;
+  --info-ink: #1b4459;
+  --neutral-soft: #e9e2d2;
+  --neutral-ink: #4b5248;
+
+  --focus-ring: #c76a3d;
+
+  /* Category colours */
+  --cat-metal-paint: #a84f2a;
+  --cat-metal-paint-soft: #f3dccf;
+  --cat-lawn: #5b8a2e;
+  --cat-lawn-soft: #e2edd3;
+  --cat-garden: #2f7d58;
+  --cat-garden-soft: #d6ebdf;
+  --cat-trees: #74552f;
+  --cat-trees-soft: #ebdfcd;
+  --cat-drainage: #2d6f8e;
+  --cat-drainage-soft: #d6e7ef;
+  --cat-pests: #8c6d12;
+  --cat-pests-soft: #f0e6c6;
+  --cat-house: #79568f;
+  --cat-house-soft: #e8ddef;
+  --cat-water: #1f84a3;
+  --cat-water-soft: #d3ecf3;
+  --cat-safety: #b3362b;
+  --cat-safety-soft: #f6d9d4;
+  --cat-cats: #c0711b;
+  --cat-cats-soft: #f7e3c9;
+
+  /* Charts — categorical series slots (fixed order; validated with the dataviz validator against
+     --surface: adjacent CVD ΔE ≥ 13.1, normal-vision ΔE ≥ 20.3; slot 5 is < 3:1 so charts always
+     ship a legend + table view). Assign in order, never cycle; colour follows the entity. */
+  --chart-1: #2f8a4f;
+  --chart-2: #2f74c0;
+  --chart-3: #d0602b;
+  --chart-4: #13998a;
+  --chart-5: #d89a12;
+  --chart-6: #d0628e;
+  --chart-7: #6650b0;
+  --chart-8: #7a9a1e;
+  /* Sequential (magnitude) — one hue, light → dark. seq-0 = no activity. */
+  --seq-0: #ece4d2;
+  --seq-1: #c4dec3;
+  --seq-2: #8fc093;
+  --seq-3: #569c66;
+  --seq-4: #2f7a45;
+  --seq-5: #1b5230;
+  /* Chart chrome */
+  --chart-grid: #ebe2cf;
+  --chart-axis: #cbbd9f;
+
+  /* Shape & depth */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 0 rgb(60 45 20 / 0.04), 0 2px 8px -2px rgb(60 45 20 / 0.12);
+  --shadow-raised: 0 2px 4px rgb(60 45 20 / 0.06), 0 12px 32px -8px rgb(60 45 20 / 0.24);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-stamp: 420ms;
+
+  /* Type */
+  --font-display-family: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-sans-family:
+    'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Print (paper is always white, ink always black — not swapped in dark mode) */
+  --print-paper: #ffffff;
+  --print-ink: #000000;
+}
+
+/* Dark: deep moss & charcoal */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --paper: #141a16;
+    --paper-grain: #1a221c;
+    --surface: #1c241f;
+    --surface-raised: #232d27;
+    --surface-sunken: #111612;
+    --overlay: rgb(0 0 0 / 0.6);
+
+    --ink: #ece6d8;
+    --ink-muted: #b4b2a4;
+    --ink-subtle: #868a7e;
+    --ink-inverse: #141a16;
+
+    --line: #2f3a33;
+    --line-strong: #46534a;
+
+    --primary: #7fb48a;
+    --primary-hover: #95c49f;
+    --primary-ink: #0f1a12;
+    --primary-soft: #23382a;
+    --primary-soft-ink: #b9dcc0;
+
+    --accent: #e08a62;
+    --accent-hover: #eaa17f;
+    --accent-ink: #1d0f08;
+    --accent-soft: #3d2519;
+    --accent-soft-ink: #f2c2aa;
+
+    --success: #6cc08a;
+    --success-soft: #1e3526;
+    --success-ink: #b4e3c3;
+    --warning: #e2b24e;
+    --warning-soft: #3a2f15;
+    --warning-ink: #f2d899;
+    --danger: #ec7d70;
+    --danger-soft: #3f1f1b;
+    --danger-ink: #f7c1b9;
+    --info: #74b5d6;
+    --info-soft: #1a3140;
+    --info-ink: #bfe0f0;
+    --neutral-soft: #2a322d;
+    --neutral-ink: #c9c6b8;
+
+    --focus-ring: #e9a37f;
+
+    --cat-metal-paint: #e08a62;
+    --cat-metal-paint-soft: #3d2519;
+    --cat-lawn: #9fcf6a;
+    --cat-lawn-soft: #2a3a1c;
+    --cat-garden: #6cc59a;
+    --cat-garden-soft: #1b3529;
+    --cat-trees: #c9a477;
+    --cat-trees-soft: #372b1c;
+    --cat-drainage: #72b3d3;
+    --cat-drainage-soft: #19303c;
+    --cat-pests: #d9bb55;
+    --cat-pests-soft: #36301a;
+    --cat-house: #bb9bd2;
+    --cat-house-soft: #302639;
+    --cat-water: #5fc4e0;
+    --cat-water-soft: #163541;
+    --cat-safety: #ec7d70;
+    --cat-safety-soft: #3f1f1b;
+    --cat-cats: #f0a956;
+    --cat-cats-soft: #3d2b16;
+
+    --chart-1: #4ea56a;
+    --chart-2: #5291dd;
+    --chart-3: #d66a36;
+    --chart-4: #1f9a8b;
+    --chart-5: #b98a1a;
+    --chart-6: #cc6290;
+    --chart-7: #9583e6;
+    --chart-8: #7f9c22;
+    /* Dark flips the anchor: low = near the surface, high = bright. */
+    --seq-0: #222c25;
+    --seq-1: #2a4a33;
+    --seq-2: #367048;
+    --seq-3: #46955d;
+    --seq-4: #68b97f;
+    --seq-5: #a8dcb4;
+    --chart-grid: #26302a;
+    --chart-axis: #3a463e;
+
+    --shadow-card: 0 1px 0 rgb(0 0 0 / 0.3), 0 2px 10px -2px rgb(0 0 0 / 0.5);
+    --shadow-raised: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 40px -8px rgb(0 0 0 / 0.65);
+  }
+}
+
+/* Map tokens into Tailwind v4 utilities. `inline` keeps the var() references so the
+   dark-mode swap above applies without `dark:` variants. */
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-grain: var(--paper-grain);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-overlay: var(--overlay);
+
+  --color-print-paper: var(--print-paper);
+  --color-print-ink: var(--print-ink);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+  --color-ink-inverse: var(--ink-inverse);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-ink: var(--primary-soft-ink);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-ink: var(--accent-soft-ink);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-neutral-ink: var(--neutral-ink);
+
+  --color-focus: var(--focus-ring);
+
+  --color-cat-metal-paint: var(--cat-metal-paint);
+  --color-cat-metal-paint-soft: var(--cat-metal-paint-soft);
+  --color-cat-lawn: var(--cat-lawn);
+  --color-cat-lawn-soft: var(--cat-lawn-soft);
+  --color-cat-garden: var(--cat-garden);
+  --color-cat-garden-soft: var(--cat-garden-soft);
+  --color-cat-trees: var(--cat-trees);
+  --color-cat-trees-soft: var(--cat-trees-soft);
+  --color-cat-drainage: var(--cat-drainage);
+  --color-cat-drainage-soft: var(--cat-drainage-soft);
+  --color-cat-pests: var(--cat-pests);
+  --color-cat-pests-soft: var(--cat-pests-soft);
+  --color-cat-house: var(--cat-house);
+  --color-cat-house-soft: var(--cat-house-soft);
+  --color-cat-water: var(--cat-water);
+  --color-cat-water-soft: var(--cat-water-soft);
+  --color-cat-safety: var(--cat-safety);
+  --color-cat-safety-soft: var(--cat-safety-soft);
+  --color-cat-cats: var(--cat-cats);
+  --color-cat-cats-soft: var(--cat-cats-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-seq-0: var(--seq-0);
+  --color-seq-1: var(--seq-1);
+  --color-seq-2: var(--seq-2);
+  --color-seq-3: var(--seq-3);
+  --color-seq-4: var(--seq-4);
+  --color-seq-5: var(--seq-5);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-card: var(--radius-card);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+
+  --ease-out: var(--ease-out);
+
+  --animate-fade-in: fade-in var(--duration-base) var(--ease-out) both;
+  --animate-pop-in: pop-in var(--duration-base) var(--ease-out) both;
+  --animate-sheet-up: sheet-up 280ms var(--ease-out) both;
+  --animate-toast-in: toast-in 260ms var(--ease-out) both;
+  --animate-stamp-in: stamp-in var(--duration-stamp) cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-check-draw: check-draw 320ms var(--ease-out) 60ms both;
+  --animate-box-fill: box-fill 220ms var(--ease-out) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  --font-display: var(--font-display-family);
+  --font-sans: var(--font-sans-family);
+}

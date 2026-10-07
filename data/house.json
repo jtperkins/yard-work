@@ -1,0 +1,35 @@
+{
+  "timezone": "America/Costa_Rica",
+  "rainyMonths": [5, 6, 7, 8, 9, 10, 11],
+  "yardDay": 4,
+  "people": ["JT", "Vecino / Neighbor", "Jardinero / Yard worker"],
+  "areas": {
+    "whole-property": { "en": "Whole property", "es": "Toda la propiedad" },
+    "gates-fences": { "en": "Gates, railings & fences", "es": "Portones, barandas y cercas" },
+    "lawn": { "en": "Lawn", "es": "Zacate" },
+    "garden-beds": { "en": "Garden beds & pots", "es": "Jardineras y macetas" },
+    "trees": { "en": "Trees & fruit trees", "es": "Árboles y frutales" },
+    "patio-walkways": { "en": "Patio & walkways", "es": "Patio y aceras" },
+    "roof-gutters": { "en": "Roof & gutters", "es": "Techo y canoas" },
+    "drains-ditches": {
+      "en": "Drains, ditches & culverts",
+      "es": "Desagües, cunetas y alcantarillas"
+    },
+    "water-system": { "en": "Water tank, pump & filter", "es": "Tanque, bomba y filtro de agua" },
+    "septic": { "en": "Septic tank & drain field", "es": "Tanque séptico y drenaje" },
+    "house-exterior": { "en": "House exterior", "es": "Exterior de la casa" },
+    "house-interior": { "en": "House interior", "es": "Interior de la casa" }
+  },
+  "categories": {
+    "metal-paint": { "en": "Metal & paint", "es": "Metal y pintura", "color": "cat-metal-paint" },
+    "lawn": { "en": "Lawn", "es": "Zacate", "color": "cat-lawn" },
+    "garden": { "en": "Garden", "es": "Jardín", "color": "cat-garden" },
+    "trees": { "en": "Trees", "es": "Árboles", "color": "cat-trees" },
+    "drainage": { "en": "Drainage", "es": "Drenajes", "color": "cat-drainage" },
+    "pests": { "en": "Pests", "es": "Plagas", "color": "cat-pests" },
+    "house": { "en": "House", "es": "Casa", "color": "cat-house" },
+    "water": { "en": "Water", "es": "Agua", "color": "cat-water" },
+    "safety": { "en": "Safety", "es": "Seguridad", "color": "cat-safety" },
+    "cats": { "en": "Cats", "es": "Gatos", "color": "cat-cats" }
+  }
+}

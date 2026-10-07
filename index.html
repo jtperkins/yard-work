@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- translate="no": the app has its own EN/ES toggle, and browser page translation rewrites
+     React-managed text nodes (stale UI, removeChild crashes). -->
+<html lang="en" translate="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="google" content="notranslate" />
+    <title>Yard Work</title>
+    <meta
+      name="description"
+      content="House & grounds checklist: see what's due, plan the week, sign off the work."
+    />
+    <meta name="theme-color" content="#2e5b3a" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141a16" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Yard Work" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>
