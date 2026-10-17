@@ -1,0 +1,3 @@
+# Private site: tell every search engine and crawler not to index, follow or cache anything.
+/*
+  X-Robots-Tag: noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai

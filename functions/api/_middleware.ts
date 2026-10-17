@@ -3,6 +3,7 @@
  *  - parses the `yw_session` cookie into `context.data.user`
  *  - 401 for writes without a session (except login/logout) and for any /api/notes request
  *  - turns uncaught errors into `{ error }` JSON (500)
+ *  - marks every response noindex (static files get the same header from public/_headers)
  */
 import {
   type AppFunction,
@@ -12,7 +13,17 @@ import {
   toErrorResponse,
 } from '../../server/lib';
 
-export const onRequest: AppFunction = async (ctx) => {
+const NO_INDEX = 'noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai';
+
+function noIndex(res: Response): Response {
+  const out = new Response(res.body, res);
+  out.headers.set('X-Robots-Tag', NO_INDEX);
+  return out;
+}
+
+export const onRequest: AppFunction = async (ctx) => noIndex(await handle(ctx));
+
+const handle: AppFunction = async (ctx) => {
   try {
     ctx.data.user = await sessionUser(ctx.request, ctx.env.SESSION_SECRET);
     const { pathname } = new URL(ctx.request.url);

@@ -200,3 +200,12 @@ describe('unknown routes', () => {
     expect(wrongMethod.status).toBe(404);
   });
 });
+
+describe('search engines', () => {
+  it('marks API responses noindex, including 401s and 404s', async () => {
+    for (const path of ['/api/tasks', '/api/incidents', '/api/nope']) {
+      const res = await api(h, path);
+      expect(res.headers.get('x-robots-tag')).toContain('noindex');
+    }
+  });
+});
