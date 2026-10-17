@@ -142,32 +142,19 @@ describe('cookies', () => {
 });
 
 describe('requiresSession', () => {
-  it('lets anyone read public data', () => {
-    expect(requiresSession('GET', '/api/completions')).toBe(false);
-    expect(requiresSession('GET', '/api/tasks')).toBe(false);
-    expect(requiresSession('HEAD', '/api/me')).toBe(false);
+  it('gates every read and write', () => {
+    for (const path of ['/api/completions', '/api/completions/latest', '/api/tasks', '/api/tasks/x', '/api/notes', '/api/incidents', '/api/incidents/files/abc', '/api/nope']) {
+      expect(requiresSession('GET', path)).toBe(true);
+      expect(requiresSession('POST', path)).toBe(true);
+    }
+    expect(requiresSession('PATCH', '/api/tasks/x')).toBe(true);
+    expect(requiresSession('DELETE', '/api/incidents/x')).toBe(true);
   });
 
-  it('gates every write except login/logout', () => {
-    expect(requiresSession('POST', '/api/completions')).toBe(true);
-    expect(requiresSession('DELETE', '/api/incidents/x')).toBe(true);
-    expect(requiresSession('PATCH', '/api/tasks/x')).toBe(true);
+  it('leaves login, logout and me open', () => {
     expect(requiresSession('POST', '/api/login')).toBe(false);
     expect(requiresSession('POST', '/api/logout/')).toBe(false);
-    expect(requiresSession('POST', '/api/nope')).toBe(true);
-  });
-
-  it('gates reading notes', () => {
-    expect(requiresSession('GET', '/api/notes')).toBe(true);
-    expect(requiresSession('GET', '/api/notes/')).toBe(true);
-    expect(requiresSession('GET', '/api/notes/abc')).toBe(true);
-    expect(requiresSession('GET', '/api/notesy')).toBe(false);
-  });
-
-  it('gates reading incidents and their files', () => {
-    expect(requiresSession('GET', '/api/incidents')).toBe(true);
-    expect(requiresSession('GET', '/api/incidents/abc')).toBe(true);
-    expect(requiresSession('GET', '/api/incidents/files/abc')).toBe(true);
-    expect(requiresSession('GET', '/api/incidentsy')).toBe(false);
+    expect(requiresSession('GET', '/api/me')).toBe(false);
+    expect(requiresSession('HEAD', '/api/me')).toBe(false);
   });
 });

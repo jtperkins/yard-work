@@ -116,7 +116,7 @@ describe('POST /api/completions with tasks from the database', () => {
   it('stores a partial sign-off and returns it flagged', async () => {
     const res = await signOff({ taskId: 'chapia', partial: true, note: 'Back next week' });
     expect(res.status).toBe(201);
-    const list = await api<CompletionsRes>(h, '/api/completions');
+    const list = await api<CompletionsRes>(h, '/api/completions', { as: 'JT' });
     expect(list.body.completions[0]?.partial).toBe(true);
   });
 });
@@ -132,7 +132,7 @@ describe('GET /api/completions', () => {
 
   it('lists non-deleted completions newest first, default last 400 days', async () => {
     await seed();
-    const res = await api<CompletionsRes>(h, '/api/completions');
+    const res = await api<CompletionsRes>(h, '/api/completions', { as: 'JT' });
     expect(res.status).toBe(200);
     expect(res.body.completions.map((c) => c.doneOn)).toEqual([
       today(),
@@ -147,21 +147,27 @@ describe('GET /api/completions', () => {
     const ranged = await api<CompletionsRes>(
       h,
       `/api/completions?from=${addDays(t, -5)}&to=${addDays(t, -1)}`,
+      { as: 'JT' },
     );
     expect(ranged.body.completions).toHaveLength(1);
     const byTask = await api<CompletionsRes>(
       h,
       `/api/completions?task=chapia&from=${addDays(t, -500)}`,
+      { as: 'JT' },
     );
     expect(byTask.body.completions.map((c) => c.taskId)).toEqual(['chapia']);
-    const all = await api<CompletionsRes>(h, `/api/completions?from=${addDays(t, -500)}`);
+    const all = await api<CompletionsRes>(h, `/api/completions?from=${addDays(t, -500)}`, {
+      as: 'JT',
+    });
     expect(all.body.completions).toHaveLength(4);
   });
 
   it('validates the query', async () => {
-    expect((await api(h, '/api/completions?from=yesterday')).status).toBe(400);
-    expect((await api(h, '/api/completions?from=2026-05-02&to=2026-05-01')).status).toBe(400);
-    expect((await api(h, '/api/completions?task=Not%20A%20Slug')).status).toBe(400);
+    expect((await api(h, '/api/completions?from=yesterday', { as: 'JT' })).status).toBe(400);
+    expect(
+      (await api(h, '/api/completions?from=2026-05-02&to=2026-05-01', { as: 'JT' })).status,
+    ).toBe(400);
+    expect((await api(h, '/api/completions?task=Not%20A%20Slug', { as: 'JT' })).status).toBe(400);
   });
 });
 
@@ -175,7 +181,7 @@ describe('GET /api/completions/latest', () => {
     await api(h, `/api/completions/${deleted.body.id}`, { method: 'DELETE', as: 'JT' });
     await signOff({ title: 'Ad-hoc job', doneOn: t });
 
-    const res = await api<CompletionsRes>(h, '/api/completions/latest');
+    const res = await api<CompletionsRes>(h, '/api/completions/latest', { as: 'JT' });
     expect(res.status).toBe(200);
     const byTask = Object.fromEntries(res.body.completions.map((c) => [c.taskId, c]));
     expect(Object.keys(byTask).sort()).toEqual(['chapia', 'rust-inspection']);
@@ -194,7 +200,7 @@ describe('GET /api/completions/latest with partials', () => {
       note: 'half',
     });
     const rows = async () =>
-      (await api<CompletionsRes>(h, '/api/completions/latest')).body.completions;
+      (await api<CompletionsRes>(h, '/api/completions/latest', { as: 'JT' })).body.completions;
     let latest = await rows();
     expect(latest.map((c) => [c.partial, c.doneOn]).sort()).toEqual([
       [false, '2026-09-20'],
@@ -227,7 +233,7 @@ describe('DELETE /api/completions/:id', () => {
     expect(row?.deleted_at).toBeTruthy();
     expect(row?.deleted_by).toBe('Neighbor');
 
-    const list = await api<CompletionsRes>(h, '/api/completions');
+    const list = await api<CompletionsRes>(h, '/api/completions', { as: 'JT' });
     expect(list.body.completions).toHaveLength(0);
 
     const again = await api(h, `/api/completions/${id}`, { method: 'DELETE', as: 'JT' });

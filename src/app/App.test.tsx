@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeApi, createTestQueryClient, type FakeApi } from '../api/test-utils';
 import { makeTask } from '../domain/test-fixtures';
@@ -9,7 +9,12 @@ import type { Lang } from '../i18n';
 import { AppRoutes } from './routes';
 import { paths } from './paths';
 
-function renderAt(path: string, { lang = 'en' as Lang, me = null as string | null } = {}) {
+function LocationProbe() {
+  const { pathname, search } = useLocation();
+  return <output data-testid="location">{`${pathname}${search}`}</output>;
+}
+
+function renderAt(path: string, { lang = 'en' as Lang, me = 'JT' as string | null } = {}) {
   const api: FakeApi = createFakeApi();
   api.on('GET /api/me', { name: me });
   api.on('GET /api/completions/latest', { completions: [] });
@@ -23,6 +28,7 @@ function renderAt(path: string, { lang = 'en' as Lang, me = null as string | nul
     <TestProviders api={api} qc={qc} lang={lang}>
       <MemoryRouter initialEntries={[path]}>
         <AppRoutes />
+        <LocationProbe />
       </MemoryRouter>
     </TestProviders>,
   );
@@ -37,12 +43,11 @@ afterEach(() => vi.useRealTimers());
 
 describe('app routes', () => {
   it.each([
-    ['/', /^Good (morning|afternoon|evening)$/],
+    ['/', /^Good (morning|afternoon|evening)/],
     ['/tasks', 'Tasks'],
     ['/tasks/chapia', 'Chapia'],
-    ['/login', 'Sign in'],
     ['/nope', 'Page not found'],
-  ])('%s renders its screen', async (path, heading) => {
+  ])('%s renders its screen when signed in', async (path, heading) => {
     renderAt(path);
     expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
   });
@@ -59,7 +64,7 @@ describe('app routes', () => {
       expect(
         await screen.findByRole('heading', {
           level: 1,
-          name: /^Good (morning|afternoon|evening)$/,
+          name: /^Good (morning|afternoon|evening)/,
         }),
       ).toBeInTheDocument();
     },
@@ -78,21 +83,19 @@ describe('app routes', () => {
     }
   });
 
-  it('gates the task form and incidents behind sign-in', async () => {
-    renderAt('/tasks/new');
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Sign in to see this page' }),
-    ).toBeInTheDocument();
+  it('/login renders when signed out', async () => {
+    renderAt('/login', { me: null });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
   });
 
-  it('gates /handoff behind sign-in', async () => {
-    renderAt('/handoff');
-    expect(
-      await screen.findByRole('heading', { level: 1, name: 'Sign in to see this page' }),
-    ).toBeInTheDocument();
-    for (const link of screen.getAllByRole('link', { name: 'Sign in' })) {
-      expect(link).toHaveAttribute('href', '/login?next=%2Fhandoff');
-    }
+  it.each([
+    ['/', '/login?next=%2F'],
+    ['/tasks/chapia', '/login?next=%2Ftasks%2Fchapia'],
+    ['/handoff', '/login?next=%2Fhandoff'],
+  ])('signed out, %s redirects to the login form with next preserved', async (path, expected) => {
+    renderAt(path, { me: null });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent(expected);
   });
 
   it('renders navigation in Spanish with the current page marked', async () => {
@@ -116,19 +119,10 @@ describe('app routes', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Tareas' })).toBeInTheDocument();
   });
 
-  it('shows the signed-in name with a sign-out control, or a sign-in link', async () => {
-    const signedIn = renderAt('/', { me: 'JT' });
+  it('shows the signed-in name with a sign-out control', async () => {
+    renderAt('/');
     expect(await screen.findAllByRole('button', { name: 'Sign out' })).not.toHaveLength(0);
     expect(screen.getAllByText('Signed in as JT').length).toBeGreaterThan(0);
-    signedIn.unmount();
-
-    renderAt('/tasks');
-    await waitFor(() =>
-      expect(screen.getAllByRole('link', { name: 'Sign in' })[0]).toHaveAttribute(
-        'href',
-        '/login?next=%2Ftasks',
-      ),
-    );
   });
 
   it('path builders', () => {

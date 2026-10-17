@@ -7,7 +7,7 @@ import { LogScreen } from '../features/log';
 import { InsightsScreen } from '../features/insights';
 import { HandoffScreen } from '../features/handoff';
 import { LoginScreen } from '../features/auth';
-import { RequireAuth } from '../features/shared/RequireAuth';
+import { SignedInOnly } from '../features/shared/SignedInOnly';
 import { AppLayout } from './AppLayout';
 import { NotFoundScreen } from './NotFoundScreen';
 
@@ -15,19 +15,19 @@ import { NotFoundScreen } from './NotFoundScreen';
 const KitchenSink = import.meta.env.DEV ? lazy(() => import('../ui/KitchenSink')) : null;
 
 /**
- * FINAL route table (plan §6.3). Frozen after Phase 1 — features own their screens, not routes.
+ * Route table. Every screen except /login is sign-in only (SignedInOnly redirects to /login?next=…).
  *
  *   /                      Board
  *   /tasks                 Task list
- *   /tasks/new             New task (sign-in only)
+ *   /tasks/new             New task
  *   /tasks/:id             Task detail
- *   /tasks/:id/edit        Edit task (sign-in only)
- *   /incidents             Incident reports (sign-in only)
- *   /incidents/new         Report an incident (sign-in only)
- *   /incidents/:id         Incident detail (sign-in only)
+ *   /tasks/:id/edit        Edit task
+ *   /incidents             Incident reports
+ *   /incidents/new         Report an incident
+ *   /incidents/:id         Incident detail
  *   /log                   Sign-off log
  *   /insights              Charts
- *   /handoff               Handoff notes (sign-in only, gated by RequireAuth)
+ *   /handoff               Handoff notes
  *   /login                 Sign in (?next=/path)
  *   /ui                    Kitchen sink (dev only)
  *   /week/*, /calendar/*   Old screens, redirect to the Board
@@ -36,63 +36,24 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route index element={<BoardScreen />} />
-        <Route path="week/*" element={<Navigate to="/" replace />} />
-        <Route path="calendar/*" element={<Navigate to="/" replace />} />
-        <Route path="tasks" element={<TasksScreen />} />
-        <Route
-          path="tasks/new"
-          element={
-            <RequireAuth>
-              <TaskFormScreen />
-            </RequireAuth>
-          }
-        />
-        <Route path="tasks/:id" element={<TaskDetailScreen />} />
-        <Route
-          path="tasks/:id/edit"
-          element={
-            <RequireAuth>
-              <TaskFormScreen />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="incidents"
-          element={
-            <RequireAuth>
-              <IncidentsScreen />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="incidents/new"
-          element={
-            <RequireAuth>
-              <NewIncidentScreen />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="incidents/:id"
-          element={
-            <RequireAuth>
-              <IncidentDetailScreen />
-            </RequireAuth>
-          }
-        />
-        <Route path="log" element={<LogScreen />} />
-        <Route path="insights" element={<InsightsScreen />} />
-        <Route
-          path="handoff"
-          element={
-            <RequireAuth>
-              <HandoffScreen />
-            </RequireAuth>
-          }
-        />
         <Route path="login" element={<LoginScreen />} />
-        <Route path="*" element={<NotFoundScreen />} />
+        {/* Everything else is private: signed-out visitors are sent to /login?next=… */}
+        <Route element={<SignedInOnly />}>
+          <Route index element={<BoardScreen />} />
+          <Route path="week/*" element={<Navigate to="/" replace />} />
+          <Route path="calendar/*" element={<Navigate to="/" replace />} />
+          <Route path="tasks" element={<TasksScreen />} />
+          <Route path="tasks/new" element={<TaskFormScreen />} />
+          <Route path="tasks/:id" element={<TaskDetailScreen />} />
+          <Route path="tasks/:id/edit" element={<TaskFormScreen />} />
+          <Route path="incidents" element={<IncidentsScreen />} />
+          <Route path="incidents/new" element={<NewIncidentScreen />} />
+          <Route path="incidents/:id" element={<IncidentDetailScreen />} />
+          <Route path="log" element={<LogScreen />} />
+          <Route path="insights" element={<InsightsScreen />} />
+          <Route path="handoff" element={<HandoffScreen />} />
+          <Route path="*" element={<NotFoundScreen />} />
+        </Route>
       </Route>
       {KitchenSink && (
         <Route

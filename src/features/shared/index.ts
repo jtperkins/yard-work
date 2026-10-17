@@ -12,3 +12,4 @@ export { useErrorMessage } from './errors';
 export { useToday } from './today';
 export { TaskStatusRow } from './TaskStatusRow';
 export type { TaskStatusRowProps } from './TaskStatusRow';
+export { SignedInOnly } from './SignedInOnly';

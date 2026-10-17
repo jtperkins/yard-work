@@ -19,8 +19,9 @@ function create(body: object, as: string | undefined = 'JT') {
 }
 
 describe('tasks API', () => {
-  it('lists publicly, but creating needs a session', async () => {
-    const list = await api<TasksRes>(h, '/api/tasks');
+  it('lists for a signed-in user, but a signed-out read or write is refused', async () => {
+    expect((await api(h, '/api/tasks')).status).toBe(401);
+    const list = await api<TasksRes>(h, '/api/tasks', { as: 'JT' });
     expect(list.status).toBe(200);
     expect(list.body).toEqual({ tasks: [] });
     const post = await api<ApiError>(h, '/api/tasks', {
@@ -53,11 +54,11 @@ describe('tasks API', () => {
 
   it('serves a task by slug and 404s on a non-slug', async () => {
     await create({ title: 'New', kind: 'once' });
-    const got = await api<TaskRes>(h, '/api/tasks/new-task');
+    const got = await api<TaskRes>(h, '/api/tasks/new-task', { as: 'JT' });
     expect(got.status).toBe(200);
     expect(got.body.task.title).toBe('New');
-    expect((await api(h, '/api/tasks/NOT_A_SLUG')).status).toBe(404);
-    expect((await api(h, '/api/tasks/nope')).status).toBe(404);
+    expect((await api(h, '/api/tasks/NOT_A_SLUG', { as: 'JT' })).status).toBe(404);
+    expect((await api(h, '/api/tasks/nope', { as: 'JT' })).status).toBe(404);
   });
 
   it('stores steps one per line and splits them back', async () => {
@@ -126,15 +127,19 @@ describe('tasks API', () => {
       body: { archived: true },
     });
     expect(archive.body.task.archivedAt).toBeTruthy();
-    expect((await api<TasksRes>(h, '/api/tasks')).body.tasks).toHaveLength(0);
-    expect((await api<TasksRes>(h, '/api/tasks?archived=1')).body.tasks).toHaveLength(1);
-    expect((await api<TaskRes>(h, '/api/tasks/gate')).body.task.archivedAt).toBeTruthy();
+    expect((await api<TasksRes>(h, '/api/tasks', { as: 'JT' })).body.tasks).toHaveLength(0);
+    expect((await api<TasksRes>(h, '/api/tasks?archived=1', { as: 'JT' })).body.tasks).toHaveLength(
+      1,
+    );
+    expect(
+      (await api<TaskRes>(h, '/api/tasks/gate', { as: 'JT' })).body.task.archivedAt,
+    ).toBeTruthy();
     const back = await api<TaskRes>(h, '/api/tasks/gate', {
       method: 'PATCH',
       as: 'JT',
       body: { archived: false },
     });
     expect(back.body.task.archivedAt).toBeNull();
-    expect((await api<TasksRes>(h, '/api/tasks')).body.tasks).toHaveLength(1);
+    expect((await api<TasksRes>(h, '/api/tasks', { as: 'JT' })).body.tasks).toHaveLength(1);
   });
 });

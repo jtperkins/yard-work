@@ -181,23 +181,34 @@ describe('auth gating', () => {
     expect(row?.n).toBe(0);
   });
 
-  it('GET /api/notes requires sign-in; public reads do not', async () => {
-    expect((await api(h, '/api/notes')).status).toBe(401);
-    expect((await api(h, '/api/completions')).status).toBe(200);
-    expect((await api(h, '/api/completions/latest')).status).toBe(200);
-    expect((await api(h, '/api/tasks')).status).toBe(200);
+  it('every GET requires sign-in; signed in they succeed', async () => {
+    for (const path of [
+      '/api/notes',
+      '/api/completions',
+      '/api/completions/latest',
+      '/api/tasks',
+    ]) {
+      expect((await api(h, path)).status).toBe(401);
+      expect((await api(h, path, { as: 'JT' })).status).toBe(200);
+    }
   });
 });
 
 describe('unknown routes', () => {
-  it('returns 404 JSON for unknown /api paths and unsupported methods', async () => {
-    const res = await api<ApiError>(h, '/api/nope');
+  it('returns 404 JSON for unknown /api paths and unsupported methods when signed in', async () => {
+    const res = await api<ApiError>(h, '/api/nope', { as: 'JT' });
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'Not found' });
     expect(res.headers.get('content-type')).toContain('application/json');
     // GET on a DELETE-only route falls through to the catch-all
-    const wrongMethod = await api(h, '/api/completions/6f1c1c7e-3c1a-4d0e-9a51-2b8a4f6f0c11');
+    const wrongMethod = await api(h, '/api/completions/6f1c1c7e-3c1a-4d0e-9a51-2b8a4f6f0c11', {
+      as: 'JT',
+    });
     expect(wrongMethod.status).toBe(404);
+  });
+
+  it('signed out, unknown /api paths are 401 too', async () => {
+    expect((await api(h, '/api/nope')).status).toBe(401);
   });
 });
 
