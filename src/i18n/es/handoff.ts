@@ -81,7 +81,7 @@ const handoff: typeof en = {
     'Las tareas se agregan y se editan en la app (Tareas → Nueva tarea). Los cambios se ven de inmediato.',
   'how.access.title': 'Ver e ingresar',
   'how.access.body':
-    'Cualquiera con el enlace puede ver. Para firmar, editar tareas, reportar incidentes y leer estas notas se necesita su nombre y el código de la casa. Pídaselo a quien organiza.',
+    'El sitio es privado: para ver o cambiar cualquier cosa se necesita su nombre y el código de la casa. Pídaselo a quien organiza.',
 
   loadError: 'No se pudieron cargar las notas.',
 };

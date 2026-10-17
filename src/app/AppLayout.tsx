@@ -36,7 +36,7 @@ export function AppLayout() {
   return (
     <AppShell
       brand={<BrandMark name={t('app.name')} tagline={t('app.tagline')} icon={Leaf} />}
-      navItems={items}
+      navItems={session.isSignedIn ? items : []}
       linkComponent={RouterLink}
       headerActions={
         <>

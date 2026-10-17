@@ -3,7 +3,7 @@ const auth = {
   title: 'Sign in',
   eyebrow: 'House crew',
   description:
-    'Use your name and the house code to sign off work, edit tasks and report incidents. Anyone with the link can look at the board without signing in.',
+    'Use your name and the house code to sign off work, edit tasks and report incidents. This site is private, so you need to sign in to see anything.',
   nameHint: 'Shown on everything you sign.',
   codeHint: 'Ask the owner or the last house-sitter.',
   submit: 'Sign in',
@@ -13,9 +13,6 @@ const auth = {
   alreadyBody: 'Signed in as {name}. You can sign off work, edit tasks and report incidents.',
   continue: 'Continue',
   signOutInstead: 'Sign out',
-  readOnlyTitle: 'Just looking?',
-  readOnlyBody: 'The board, tasks and log are open to everyone — no sign-in needed.',
-  browseBoard: 'Go to the board',
   'gate.title': 'Sign in to see this page',
   'gate.description': 'This page holds private house details, so it’s only for the house crew.',
   'gate.cardTitle': 'Members only',

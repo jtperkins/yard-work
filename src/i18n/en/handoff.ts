@@ -78,7 +78,7 @@ const handoff = {
     'Tasks are added and edited in the app (Tasks → New task). Changes show immediately.',
   'how.access.title': 'Viewing and signing in',
   'how.access.body':
-    'Anyone with the link can look around. Signing off, editing tasks, incidents and these notes need your name and the shared house code. Ask the organizer for it.',
+    'The site is private: everything needs your name and the shared house code to see or change. Ask the organizer for it.',
 
   loadError: 'Couldn’t load the notes.',
 };

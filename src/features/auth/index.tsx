@@ -1,4 +1,4 @@
-import { ClipboardList, KeyRound, LogIn, LogOut } from 'lucide-react';
+import { KeyRound, LogIn, LogOut } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { paths } from '../../app/paths';
@@ -49,18 +49,6 @@ export function LoginScreen() {
             <LoginForm next={next} />
           )}
         </Card>
-        <Callout
-          tone="neutral"
-          icon={ClipboardList}
-          title={t('readOnlyTitle')}
-          action={
-            <LinkButton as={Link} to={paths.board()} variant="ghost" size="sm">
-              {t('browseBoard')}
-            </LinkButton>
-          }
-        >
-          {t('readOnlyBody')}
-        </Callout>
       </Grid>
     </>
   );

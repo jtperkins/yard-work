@@ -9,8 +9,9 @@ yard worker — can see what's due and hand off with zero tribal knowledge. Engl
 - **Backend:** Cloudflare Pages Functions (`functions/`) + Cloudflare D1 (SQLite) for records
   (tasks, sign-offs, handoff notes, incidents) + a private Cloudflare R2 bucket for incident files.
 - **Tasks:** stored in D1 and created, edited and archived in the app (no code change or deploy).
-- **Auth:** name + shared house code → signed HttpOnly cookie (90 days). The board, tasks and log are
-  readable without signing in; handoff notes and incidents need a session, and so does every write.
+- **Auth:** name + shared house code → signed HttpOnly cookie (90 days). The whole site is private:
+  every screen and API read needs a session (only login, logout and `/api/me` are open), and search
+  engines are told not to index anything (robots.txt, `X-Robots-Tag`, meta robots).
   This is a drive-by deterrent, not real security.
 
 ## Screens

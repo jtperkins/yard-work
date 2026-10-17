@@ -152,7 +152,7 @@ const common = {
   'account.label': 'Account',
   'account.signedOut': 'You’re signed out',
   'account.signOutFailed': 'Couldn’t sign out. Try again.',
-  'account.readOnly': 'Read-only — sign in to make changes',
+  'account.readOnly': 'Private — sign in to continue',
 
   'due.today': 'Due today',
   'due.tomorrow': 'Due tomorrow',

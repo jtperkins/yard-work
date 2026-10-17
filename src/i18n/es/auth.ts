@@ -4,7 +4,7 @@ const auth: typeof en = {
   title: 'Ingresar',
   eyebrow: 'Equipo de la casa',
   description:
-    'Use su nombre y el código de la casa para firmar trabajos, editar tareas y reportar incidentes. Cualquiera con el enlace puede mirar el tablero sin ingresar.',
+    'Use su nombre y el código de la casa para firmar trabajos, editar tareas y reportar incidentes. Este sitio es privado, así que debe ingresar para ver cualquier cosa.',
   nameHint: 'Aparece en todo lo que firme.',
   codeHint: 'Pídalo al dueño o a quien cuidó la casa antes.',
   submit: 'Ingresar',
@@ -14,9 +14,6 @@ const auth: typeof en = {
   alreadyBody: 'Ingresó como {name}. Puede firmar trabajos, editar tareas y reportar incidentes.',
   continue: 'Continuar',
   signOutInstead: 'Salir',
-  readOnlyTitle: '¿Solo quiere ver?',
-  readOnlyBody: 'El tablero, las tareas y la bitácora están abiertos para todos, sin ingresar.',
-  browseBoard: 'Ir al tablero',
   'gate.title': 'Ingrese para ver esta página',
   'gate.description':
     'Esta página tiene datos privados de la casa, así que es solo para el equipo.',

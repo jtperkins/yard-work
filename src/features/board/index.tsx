@@ -19,7 +19,6 @@ import {
   StatTile,
   type Tone,
 } from '../../ui';
-import { SignInCta } from '../shared/SignInCta';
 import { TaskStatusRow } from '../shared/TaskStatusRow';
 import { useErrorMessage } from '../shared/errors';
 import { useToday } from '../shared/today';
@@ -140,12 +139,6 @@ export function BoardScreen() {
       />
 
       <Stack gap="xl">
-        {!session.isPending && !session.isSignedIn && (
-          <Callout tone="neutral" title={t('readOnly.title')} action={<SignInCta />}>
-            {t('readOnly.body')}
-          </Callout>
-        )}
-
         {statuses.isError ? (
           <Callout
             tone="danger"

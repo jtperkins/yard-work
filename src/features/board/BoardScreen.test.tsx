@@ -191,7 +191,6 @@ describe('BoardScreen', () => {
       ).toBeGreaterThan(0),
     );
     expect(within(attention).queryByRole('button', { name: /^Sign off/ })).not.toBeInTheDocument();
-    expect(screen.getByText('You’re looking around read-only')).toBeInTheDocument();
   });
 
   it('speaks Spanish, including task text', async () => {

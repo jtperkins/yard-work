@@ -35,8 +35,6 @@ const board = {
   'upcoming.title': 'Later this week',
   'upcoming.list': 'Jobs due later this week',
 
-  'readOnly.title': 'You’re looking around read-only',
-  'readOnly.body': 'Sign in with the house code to sign off work.',
 };
 
 export default board;

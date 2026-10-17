@@ -83,9 +83,12 @@ describe('app routes', () => {
     }
   });
 
-  it('/login renders when signed out', async () => {
+  it('/login renders when signed out, with no menu and no public-access wording', async () => {
     renderAt('/login', { me: null });
     expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Board' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Incidents' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/without signing in|Just looking|read-only/i)).not.toBeInTheDocument();
   });
 
   it.each([
@@ -100,6 +103,7 @@ describe('app routes', () => {
 
   it('renders navigation in Spanish with the current page marked', async () => {
     renderAt('/tasks', { lang: 'es' });
+    await screen.findByRole('heading', { level: 1, name: 'Tareas' });
     const navs = screen.getAllByRole('navigation', { name: 'Navegación principal' });
     expect(navs.length).toBeGreaterThan(0);
     for (const nav of navs) {

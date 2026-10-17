@@ -149,7 +149,7 @@ const common: typeof en = {
   'account.label': 'Cuenta',
   'account.signedOut': 'Salió de la sesión',
   'account.signOutFailed': 'No se pudo salir. Intente de nuevo.',
-  'account.readOnly': 'Solo lectura: ingrese para hacer cambios',
+  'account.readOnly': 'Privado: ingrese para continuar',
 
   'due.today': 'Toca hoy',
   'due.tomorrow': 'Toca mañana',

@@ -36,8 +36,6 @@ const board: typeof en = {
   'upcoming.title': 'Más adelante esta semana',
   'upcoming.list': 'Trabajos que tocan más adelante esta semana',
 
-  'readOnly.title': 'Está viendo en modo de solo lectura',
-  'readOnly.body': 'Ingrese con el código de la casa para firmar trabajos.',
 };
 
 export default board;
