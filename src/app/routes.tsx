@@ -1,9 +1,8 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router';
+import { Navigate, Route, Routes } from 'react-router';
 import { BoardScreen } from '../features/board';
-import { WeekScreen } from '../features/week';
-import { CalendarScreen } from '../features/calendar';
-import { TasksScreen, TaskDetailScreen } from '../features/tasks';
+import { TasksScreen, TaskDetailScreen, TaskFormScreen } from '../features/tasks';
+import { IncidentDetailScreen, IncidentsScreen, NewIncidentScreen } from '../features/incidents';
 import { LogScreen } from '../features/log';
 import { InsightsScreen } from '../features/insights';
 import { HandoffScreen } from '../features/handoff';
@@ -19,25 +18,69 @@ const KitchenSink = import.meta.env.DEV ? lazy(() => import('../ui/KitchenSink')
  * FINAL route table (plan §6.3). Frozen after Phase 1 — features own their screens, not routes.
  *
  *   /                      Board
- *   /week/:weekStart?      Week plan (weekStart = Monday YYYY-MM-DD; default this week)
- *   /calendar/:ym?         Calendar (ym = YYYY-MM; default this month)
- *   /tasks                 Task catalog
+ *   /tasks                 Task list
+ *   /tasks/new             New task (sign-in only)
  *   /tasks/:id             Task detail
+ *   /tasks/:id/edit        Edit task (sign-in only)
+ *   /incidents             Incident reports (sign-in only)
+ *   /incidents/new         Report an incident (sign-in only)
+ *   /incidents/:id         Incident detail (sign-in only)
  *   /log                   Sign-off log
  *   /insights              Charts
  *   /handoff               Handoff notes (sign-in only, gated by RequireAuth)
  *   /login                 Sign in (?next=/path)
  *   /ui                    Kitchen sink (dev only)
+ *   /week/*, /calendar/*   Old screens, redirect to the Board
  */
 export function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<BoardScreen />} />
-        <Route path="week/:weekStart?" element={<WeekScreen />} />
-        <Route path="calendar/:ym?" element={<CalendarScreen />} />
+        <Route path="week/*" element={<Navigate to="/" replace />} />
+        <Route path="calendar/*" element={<Navigate to="/" replace />} />
         <Route path="tasks" element={<TasksScreen />} />
+        <Route
+          path="tasks/new"
+          element={
+            <RequireAuth>
+              <TaskFormScreen />
+            </RequireAuth>
+          }
+        />
         <Route path="tasks/:id" element={<TaskDetailScreen />} />
+        <Route
+          path="tasks/:id/edit"
+          element={
+            <RequireAuth>
+              <TaskFormScreen />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="incidents"
+          element={
+            <RequireAuth>
+              <IncidentsScreen />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="incidents/new"
+          element={
+            <RequireAuth>
+              <NewIncidentScreen />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="incidents/:id"
+          element={
+            <RequireAuth>
+              <IncidentDetailScreen />
+            </RequireAuth>
+          }
+        />
         <Route path="log" element={<LogScreen />} />
         <Route path="insights" element={<InsightsScreen />} />
         <Route

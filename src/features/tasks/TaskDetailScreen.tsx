@@ -1,30 +1,34 @@
-import { ArrowLeft, ShieldAlert, Stamp } from 'lucide-react';
-import { useState } from 'react';
+import { ArchiveRestore, Archive, ArrowLeft, Pencil, ShieldAlert, Stamp } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { paths } from '../../app/paths';
-import { useCatalog, useCompletions, useSession, useTaskStatuses } from '../../api';
-import { useFormatDate, useLang, useT } from '../../i18n';
-import { l10n } from '../../shared/catalog-schema';
+import { useCompletions, useSession, useTask, useUpdateTask } from '../../api';
+import { taskStatus } from '../../domain/schedule';
+import { useFormatDate, useLang, useT, localizedSteps } from '../../i18n';
 import {
   Badge,
   Button,
   Callout,
   Card,
   CardHeader,
-  EmptyState,
   DetailList,
+  EmptyState,
   Grid,
+  LinkButton,
   LogRow,
   PageHeader,
   SkeletonText,
   Stack,
+  StatusPill,
   StepList,
   Text,
   TextLink,
   Timeline,
+  useToast,
 } from '../../ui';
 import { SignInCta } from '../shared/SignInCta';
 import { TaskStatusPill } from '../shared/TaskStatusPill';
+import { useErrorMessage } from '../shared/errors';
 import { useTaskText } from '../shared/taskText';
 import { useToday } from '../shared/today';
 import { SignOffSheet } from '../signoff';
@@ -34,7 +38,7 @@ const HISTORY_FROM = '2000-01-01';
 /** History rows shown before "Show all" (daily tasks build up hundreds). */
 const HISTORY_LIMIT = 10;
 
-/** Route `/tasks/:id` — how to do it, safety, supplies, schedule facts and full history. */
+/** Route `/tasks/:id` — how to do it, safety, schedule facts and full history. */
 export function TaskDetailScreen() {
   const { id = '' } = useParams<{ id: string }>();
   const t = useT('tasks');
@@ -43,16 +47,23 @@ export function TaskDetailScreen() {
   const formatDate = useFormatDate();
   const text = useTaskText();
   const today = useToday();
-  const { taskById, supplyById } = useCatalog();
   const session = useSession();
-  const statuses = useTaskStatuses(today);
-  const task = taskById.get(id);
+  const { toast } = useToast();
+  const errorMessage = useErrorMessage();
+  const taskQuery = useTask(id);
+  const task = taskQuery.data;
+  const update = useUpdateTask();
   const history = useCompletions(
     { task: id, from: HISTORY_FROM, to: today },
     { enabled: task !== undefined },
   );
   const [signing, setSigning] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
+
+  const status = useMemo(
+    () => (task && history.data ? taskStatus(task, history.data, today) : undefined),
+    [task, history.data, today],
+  );
 
   const back = (
     <TextLink as={Link} to={paths.tasks()} tone="muted" leadingIcon={ArrowLeft}>
@@ -61,6 +72,14 @@ export function TaskDetailScreen() {
   );
 
   if (!task) {
+    if (taskQuery.isPending) {
+      return (
+        <>
+          <PageHeader back={back} title="…" />
+          <SkeletonText lines={4} />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader back={back} title={t('detail.notFoundTitle')} />
@@ -71,41 +90,54 @@ export function TaskDetailScreen() {
     );
   }
 
-  const status = statuses.data?.byId.get(task.id);
-  const steps = l10n(task.instructions, lang)
-    .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const safety = task.safety ? l10n(task.safety, lang) : null;
+  const archived = task.archivedAt !== null;
+  const steps = localizedSteps(task.steps, task.stepsEs, lang);
   const dateLong = (iso: string) =>
     formatDate(iso, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const dateShort = (iso: string) => formatDate(iso, { day: 'numeric', month: 'short' });
 
   const facts = [
     { key: 'cadence', label: t('detail.cadence'), value: text.frequencyText(task) },
-    {
-      key: 'season',
-      label: t('detail.season'),
-      value: text.activeText(task) || t('detail.allYear'),
-    },
-    { key: 'area', label: t('detail.area'), value: text.areaLabel(task.area) },
-    { key: 'who', label: t('detail.who'), value: tc(`who.${task.who}`) },
-    { key: 'time', label: t('detail.time'), value: text.minutes(task.estimatedMinutes) },
+    ...(task.kind === 'once' && task.dueOn
+      ? [{ key: 'dueOn', label: t('detail.dueOn'), value: dateLong(task.dueOn) }]
+      : []),
     { key: 'priority', label: t('detail.priority'), value: tc(`priority.${task.priority}`) },
     {
       key: 'last',
       label: t('detail.lastDone'),
       value: status?.lastDone
         ? `${dateLong(status.lastDone)}${status.lastDoneBy ? ` · ${status.lastDoneBy}` : ''}`
-        : t('detail.never'),
+        : status
+          ? t('detail.never')
+          : '–',
     },
-    {
-      key: 'next',
-      label: t('detail.nextDue'),
-      value: status ? text.dueText(status, today) : '–',
-    },
+    ...(status?.state === 'done'
+      ? []
+      : [
+          {
+            key: 'next',
+            label: t('detail.nextDue'),
+            value: status ? text.dueText(status, today) : '–',
+          },
+        ]),
   ];
 
-  const signOffAction = session.isSignedIn ? (
+  const setArchived = (value: boolean) =>
+    update.mutate(
+      { id: task.id, patch: { archived: value } },
+      {
+        onSuccess: () => toast({ title: t(value ? 'detail.archived' : 'detail.unarchived') }),
+        onError: (error) =>
+          toast({
+            tone: 'danger',
+            title: t('detail.archiveFailed'),
+            description: errorMessage(error),
+          }),
+      },
+    );
+
+  const canSignOff = !archived && status?.state !== 'done';
+  const signOffAction = !canSignOff ? null : session.isSignedIn ? (
     <Button leadingIcon={Stamp} onClick={() => setSigning(true)}>
       {tc('actions.signOff')}
     </Button>
@@ -113,81 +145,90 @@ export function TaskDetailScreen() {
     <SignInCta size="md" />
   );
 
+  const actions = (
+    <>
+      {signOffAction}
+      {session.isSignedIn && (
+        <>
+          <LinkButton
+            as={Link}
+            to={paths.taskEdit(task.id)}
+            variant="secondary"
+            leadingIcon={Pencil}
+          >
+            {t('detail.edit')}
+          </LinkButton>
+          <Button
+            variant="ghost"
+            leadingIcon={archived ? ArchiveRestore : Archive}
+            loading={update.isPending}
+            onClick={() => setArchived(!archived)}
+          >
+            {t(archived ? 'detail.unarchive' : 'detail.archive')}
+          </Button>
+        </>
+      )}
+    </>
+  );
+
   return (
     <>
       <PageHeader
         back={back}
-        eyebrow={text.categoryLabel(task.category)}
         title={text.taskName(task)}
         meta={
           <>
             {status && <TaskStatusPill state={status.state} size="md" />}
-            {!task.confirmed && (
-              <Badge variant="stamp" tone="accent">
-                {tc('status.draft')}
-              </Badge>
+            {status?.inProgress && (
+              <StatusPill status="info" label={tc('status.inProgress')} size="md" />
             )}
+            {archived && <Badge tone="neutral">{tc('status.archived')}</Badge>}
             {task.priority === 'high' && <Badge tone="danger">{tc('priority.high')}</Badge>}
           </>
         }
-        actions={signOffAction}
+        actions={actions}
       />
 
       <Stack gap="lg">
-        {!task.confirmed && (
-          <Callout tone="neutral" title={t('detail.draftTitle')}>
-            {t('detail.draftBody')}
+        {archived && (
+          <Callout tone="neutral" title={t('detail.archivedTitle')}>
+            {t('detail.archivedBody')}
+          </Callout>
+        )}
+        {status?.inProgress && (
+          <Callout tone="info" title={tc('status.inProgress')}>
+            {status.inProgress.note
+              ? t('detail.inProgressNote', {
+                  date: dateShort(status.inProgress.on),
+                  note: status.inProgress.note,
+                })
+              : t('detail.inProgress', { date: dateShort(status.inProgress.on) })}
+          </Callout>
+        )}
+        {status?.state === 'done' && status.lastDone && (
+          <Callout tone="success" title={tc('status.done')}>
+            {t('detail.doneOn', { date: dateLong(status.lastDone) })}
           </Callout>
         )}
 
         <Grid lgCols={2} gap="lg" align="start">
-          <Stack gap="lg">
-            <Card as="section" aria-labelledby="task-howto">
-              <CardHeader id="task-howto" title={t('detail.howTo')} />
-              <Stack gap="md">
+          <Card as="section" aria-labelledby="task-howto">
+            <CardHeader id="task-howto" title={t('detail.howTo')} />
+            <Stack gap="md">
+              {steps.length > 0 ? (
                 <StepList steps={steps} label={t('detail.steps')} />
-                {safety && (
-                  <Callout tone="warning" icon={ShieldAlert} title={t('detail.safety')}>
-                    {safety}
-                  </Callout>
-                )}
-              </Stack>
-            </Card>
-
-            <Card as="section" aria-labelledby="task-supplies">
-              <CardHeader id="task-supplies" title={t('detail.supplies')} />
-              {task.supplies.length === 0 ? (
-                <Text tone="muted" size="sm">
-                  {t('detail.noSupplies')}
-                </Text>
               ) : (
-                <DetailList
-                  items={task.supplies.flatMap(({ id: supplyId, note }) => {
-                    const supply = supplyById.get(supplyId);
-                    if (!supply) return [];
-                    const lines = [
-                      note ? l10n(note, lang) : null,
-                      supply.notes ? l10n(supply.notes, lang) : null,
-                      supply.whereToBuy
-                        ? t('detail.whereToBuy', { where: supply.whereToBuy })
-                        : null,
-                    ].filter(Boolean);
-                    return [
-                      {
-                        key: supplyId,
-                        label: l10n(supply.name, lang),
-                        value: (
-                          <Text size="sm" tone="muted">
-                            {lines.join(' · ') || '—'}
-                          </Text>
-                        ),
-                      },
-                    ];
-                  })}
-                />
+                <Text tone="muted" size="sm">
+                  {t('detail.noSteps')}
+                </Text>
               )}
-            </Card>
-          </Stack>
+              {task.safety && (
+                <Callout tone="warning" icon={ShieldAlert} title={t('detail.safety')}>
+                  {task.safety}
+                </Callout>
+              )}
+            </Stack>
+          </Card>
 
           <Stack gap="lg">
             <Card as="section" aria-labelledby="task-facts">
@@ -225,13 +266,19 @@ export function TaskDetailScreen() {
                         <LogRow
                           key={c.id}
                           title={dateLong(c.doneOn)}
+                          badges={
+                            c.partial ? (
+                              <Badge tone="info" size="sm">
+                                {tc('status.partial')}
+                              </Badge>
+                            ) : undefined
+                          }
                           meta={
                             c.loggedBy && c.loggedBy !== c.doneBy
                               ? t('detail.signedBy', { doneBy: c.doneBy, loggedBy: c.loggedBy })
                               : t('detail.doneBy', { doneBy: c.doneBy })
                           }
                           note={c.note ?? undefined}
-                          color={text.categoryColor(task.category)}
                         />
                       ),
                     )}

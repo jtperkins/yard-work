@@ -1,7 +1,16 @@
 import { act, render, renderHook, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LanguageProvider, detectLang, interpolate, l10n, translate, useLang, useT } from '.';
+import {
+  LanguageProvider,
+  detectLang,
+  interpolate,
+  localized,
+  localizedSteps,
+  translate,
+  useLang,
+  useT,
+} from '.';
 import type { Lang } from '.';
 
 function wrapper(initialLang?: Lang) {
@@ -49,8 +58,18 @@ describe('translate', () => {
     expect(interpolate('Hi {name} {other}', { name: 'JT' }, 'en')).toBe('Hi JT {other}');
   });
 
-  it('l10n picks catalog text', () => {
-    expect(l10n({ en: 'Mow', es: 'Chapia' }, 'es')).toBe('Chapia');
+  it('localized picks Spanish text and falls back to English when it is blank', () => {
+    expect(localized('Mow', 'Chapia', 'es')).toBe('Chapia');
+    expect(localized('Mow', 'Chapia', 'en')).toBe('Mow');
+    expect(localized('Mow', null, 'es')).toBe('Mow');
+    expect(localized('Mow', '   ', 'es')).toBe('Mow');
+  });
+
+  it('localizedSteps falls back to English when there are no Spanish steps', () => {
+    expect(localizedSteps(['one'], ['uno'], 'es')).toEqual(['uno']);
+    expect(localizedSteps(['one'], [], 'es')).toEqual(['one']);
+    expect(localizedSteps(['one'], null, 'es')).toEqual(['one']);
+    expect(localizedSteps(['one'], ['uno'], 'en')).toEqual(['one']);
   });
 });
 
@@ -75,15 +94,15 @@ describe('LanguageProvider + hooks', () => {
       const { setLang } = useLang();
       return (
         <>
-          <h1>{t('nav.week')}</h1>
+          <h1>{t('nav.tasks')}</h1>
           <button onClick={() => setLang('es')}>switch</button>
         </>
       );
     }
     render(<Probe />, { wrapper: wrapper('en') });
-    expect(screen.getByRole('heading')).toHaveTextContent('Week');
+    expect(screen.getByRole('heading')).toHaveTextContent('Tasks');
     act(() => screen.getByRole('button').click());
-    expect(screen.getByRole('heading')).toHaveTextContent('Semana');
+    expect(screen.getByRole('heading')).toHaveTextContent('Tareas');
     expect(localStorage.getItem('yw.lang')).toBe('es');
     expect(document.documentElement.lang).toBe('es-CR');
   });

@@ -1,9 +1,9 @@
 /**
- * API layer (plan §14.2): typed fetch client, query keys, TanStack Query hooks with optimistic
- * mutations + client-generated ids, derived scheduling hooks and the catalog hook.
+ * API layer: typed fetch client, query keys, TanStack Query hooks with optimistic mutations +
+ * client-generated ids, and the derived scheduling hook.
  *
- * Screens import from here only. Queries are public except notes; mutations need a session and a
- * 401 anywhere (other than a failed login) flips the cached session to signed out.
+ * Screens import from here only. Queries are public except notes and incidents; mutations need a
+ * session and a 401 anywhere (other than a failed login) flips the cached session to signed out.
  */
 
 // Client & errors
@@ -22,16 +22,9 @@ export { newId } from './ids';
 export { mutationKeys, normalizeRange, queryKeys } from './keys';
 export type { CompletionsRange } from './keys';
 
-// Providers & catalog
-export {
-  ApiClientProvider,
-  CatalogProvider,
-  defaultApiClient,
-  useApiClient,
-  useCatalog,
-} from './context';
-export type { ApiClientProviderProps, CatalogProviderProps } from './context';
-export type { Catalog } from '../domain/catalog';
+// Providers
+export { ApiClientProvider, defaultApiClient, useApiClient } from './context';
+export type { ApiClientProviderProps } from './context';
 
 // Session
 export { useLogin, useLogout, useMe, useSession } from './auth';
@@ -48,20 +41,19 @@ export {
 } from './completions';
 export type { SignOffInput, TaskStatuses } from './completions';
 
-// Weekly plan
+// Tasks
+export { useCreateTask, useTask, useTasks, useUpdateTask } from './tasks';
+export type { UpdateTaskVars } from './tasks';
+
+// Incidents
 export {
-  useAddPlanItem,
-  useRemovePlanItem,
-  useUpdatePlanItem,
-  useWeekPlan,
-  useWeekSuggestions,
-} from './plan';
-export type {
-  AddPlanItemInput,
-  DerivedQueryResult,
-  UpdatePlanItemVars,
-  WeekSuggestionsOptions,
-} from './plan';
+  useCreateIncident,
+  useDeleteIncident,
+  useIncident,
+  useIncidents,
+  useUploadIncidentFile,
+} from './incidents';
+export type { CreateIncidentInput, UploadIncidentFileVars } from './incidents';
 
 // Handoff notes
 export { useAddNote, useDeleteNote, useNotes } from './notes';

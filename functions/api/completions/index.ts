@@ -9,15 +9,12 @@ import {
   completionsQuerySchema,
   createCompletionReqSchema,
 } from '../../../src/shared/api-schemas';
-import { addDays, isFuture, nowISO, todayCR, weekStart } from '../../../src/shared/dates';
+import { addDays, isFuture, nowISO, todayCR } from '../../../src/shared/dates';
 import {
   assertKnownTask,
   badRequest,
-  conflict,
-  findPlanItemForTask,
   getCompletion,
   gone,
-  getPlanItem,
   insertCompletion,
   isUniqueViolation,
   json,
@@ -57,22 +54,7 @@ export const onRequestPost = route(async (ctx) => {
   if (existing) return replay(existing);
 
   if (isFuture(req.doneOn)) throw badRequest('doneOn: cannot be in the future');
-  assertKnownTask(req.taskId);
-
-  let planItemId: string | null = null;
-  if (req.planItemId !== undefined) {
-    const item = await getPlanItem(db, req.planItemId);
-    if (!item) throw badRequest('planItemId: unknown plan item');
-    if (item.status === 'done') throw conflict('That plan item is already signed off');
-    if (item.task_id !== null ? item.task_id !== req.taskId : req.taskId !== undefined) {
-      throw badRequest('planItemId: plan item is for a different task');
-    }
-    planItemId = item.id;
-  } else if (req.taskId !== undefined) {
-    // Auto-link the planned item for this task in the week containing doneOn.
-    const item = await findPlanItemForTask(db, weekStart(req.doneOn), req.taskId);
-    if (item?.status === 'planned') planItemId = item.id;
-  }
+  await assertKnownTask(db, req.taskId);
 
   const completion: Completion = {
     id: req.id,
@@ -82,7 +64,8 @@ export const onRequestPost = route(async (ctx) => {
     doneBy: req.doneBy,
     loggedBy: user,
     note: req.note ?? null,
-    planItemId,
+    planItemId: null,
+    partial: req.partial ?? false,
     createdAt: nowISO(),
   };
   try {

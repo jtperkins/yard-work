@@ -1,6 +1,8 @@
 /** Pages Functions bindings & secrets (wrangler.toml + .dev.vars / `wrangler pages secret`). */
 export interface Env {
   DB: D1Database;
+  /** private R2 bucket holding incident attachments (never public) */
+  INCIDENT_FILES: R2Bucket;
   /** shared house code people type to sign in (≥ 8 chars) */
   HOUSE_CODE: string;
   /** HMAC key for the yw_session cookie (32+ random bytes) */

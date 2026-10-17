@@ -9,3 +9,9 @@ database_name = "yard-work"
 # D1 database created 2026-10-07 (see README for re-creating). CI refuses to deploy while this is a placeholder.
 database_id = "d873e2fb-4c96-4de3-ab2a-10a8d700d1f4"
 migrations_dir = "migrations"
+
+# Private bucket for incident photos, videos and files. Create it once with
+# `wrangler r2 bucket create yard-work-incidents` and never enable a public URL.
+[[r2_buckets]]
+binding = "INCIDENT_FILES"
+bucket_name = "yard-work-incidents"

@@ -6,7 +6,6 @@ const log: typeof en = {
 
   'filters.label': 'Filtrar la bitácora',
   'filters.everyone': 'Todos',
-  'filters.adHoc': 'Trabajos extra',
   'filters.rangeError': 'La fecha final es anterior a la inicial.',
 
   summary_one: '{count} firma',
@@ -35,13 +34,12 @@ const log: typeof en = {
 
   'csv.date': 'Fecha',
   'csv.task': 'Tarea',
-  'csv.category': 'Categoría',
   'csv.doneBy': 'Lo hizo',
   'csv.signedBy': 'Firmó',
+  'csv.partial': 'Parcial',
   'csv.note': 'Nota',
   'csv.taskId': 'ID de tarea',
   'csv.loggedAt': 'Registrado (UTC)',
-  'csv.adHoc': 'Extra',
 
   loadError: 'No se pudo cargar la bitácora.',
 };

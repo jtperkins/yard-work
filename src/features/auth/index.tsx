@@ -2,14 +2,13 @@ import { ClipboardList, KeyRound, LogIn, LogOut } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { paths } from '../../app/paths';
-import { isUnauthorized, useCatalog, useLogin, useLogout, useSession } from '../../api';
+import { isUnauthorized, useLogin, useLogout, useSession } from '../../api';
 import { useT } from '../../i18n';
 import { LIMITS } from '../../shared/api-schemas';
 import {
   Button,
   Callout,
   Card,
-  ComboInput,
   Field,
   Grid,
   Input,
@@ -75,7 +74,6 @@ interface FormErrors {
 function LoginForm({ next }: { next: string }) {
   const t = useT('auth');
   const tc = useT('common');
-  const { house } = useCatalog();
   const login = useLogin();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -119,13 +117,7 @@ function LoginForm({ next }: { next: string }) {
     <Stack as="form" gap="md" onSubmit={submit} noValidate aria-label={t('title')}>
       {formError && <Callout tone="danger">{formError}</Callout>}
       <Field label={tc('fields.name')} hint={t('nameHint')} error={errors.name} required>
-        <ComboInput
-          value={name}
-          onValueChange={setName}
-          suggestions={house.people}
-          autoComplete="name"
-          maxLength={LIMITS.name}
-        />
+        <Input value={name} onValueChange={setName} autoComplete="name" maxLength={LIMITS.name} />
       </Field>
       <Field label={tc('fields.houseCode')} hint={t('codeHint')} error={errors.code} required>
         <Input

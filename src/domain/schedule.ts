@@ -1,181 +1,204 @@
 /**
- * Scheduling rules (plan §5 + §14.9). Pure: "today" is always passed in as a CR calendar date
- * (`todayCR(now)` at the edge), never read from the clock.
+ * Scheduling rules. Pure: "today" is always passed in as a CR calendar date (`todayCR(now)` at
+ * the edge), never read from the clock.
  *
- *  - Season is decided by `house.rainyMonths`; a task's cadence can differ per season.
- *  - `nextDue = lastDone + effectiveFrequency(task, lastDone)` — season evaluated at lastDone.
- *  - Never done & active → `never`, due today (sorted with overdue).
- *  - Today outside `activeMonths` → `dormant`, never counted as due. When a dormant period sits
- *    between the raw due date and today (or the raw due date lands in a dormant month), the task
- *    is due on the first day of the next active period instead.
- *  - `overdue`: daysUntilDue < 0. `due-soon`: due within 3 days (capped at frequency − 1 so a
- *    task just signed off is never immediately "due soon"; a daily task is due-soon on the day
- *    it is due).
+ *  - A task is recurring (every N days, weeks or months) or a one-off (optionally with a due date).
+ *  - Only full sign-offs move the schedule. A partial sign-off is an overlay (`inProgress`) that
+ *    shows work was started, and it never replaces the last full sign-off.
+ *  - Recurring: `nextDue = lastFull + interval` (calendar months for month intervals). Never
+ *    signed off fully → `never`, due today. `overdue`: daysUntilDue < 0. `due-soon`: due within 3
+ *    days (capped at interval − 1 so a task just signed off is never immediately "due soon").
+ *  - One-off: a full sign-off makes it `done`. Otherwise `never` without a due date, or
+ *    `overdue` / `due-soon` / `ok` from its due date.
  */
-import type { House, Season, Task, TaskId } from '../shared/catalog-schema';
-import {
-  addDays,
-  addMonths,
-  diffDays,
-  maxISODate,
-  monthOf,
-  parseYearMonth,
-  yearMonthOf,
-  type ISODate,
-} from '../shared/dates';
+import type { Task, TaskId } from '../shared/api-schemas';
+import { addDays, addMonthsISO, diffDays, type ISODate } from '../shared/dates';
 import type { CompletionLike } from './types';
 
 /** A task is "due soon" when due within this many days. */
 export const DUE_SOON_DAYS = 3;
 
-export const TASK_STATES = ['overdue', 'never', 'due-soon', 'ok', 'dormant'] as const;
+export const TASK_STATES = ['overdue', 'never', 'due-soon', 'ok', 'done'] as const;
 export type TaskState = (typeof TASK_STATES)[number];
+
+export interface InProgress {
+  /** date of the newest partial sign-off */
+  on: ISODate;
+  /** what is left, as written on the partial sign-off */
+  note: string | null;
+  by: string;
+}
 
 export interface TaskStatus {
   taskId: TaskId;
   state: TaskState;
-  /** most recent sign-off date (on or before today) */
+  /** most recent full sign-off date (on or before today) */
   lastDone?: ISODate;
-  /** who did the most recent sign-off, when known */
+  /** who did the most recent full sign-off, when known */
   lastDoneBy?: string;
-  /** next due date (today for `never`; the first active day for dormant tasks) */
+  /** next due date (today for `never`, undefined for a `done` one-off) */
   nextDue?: ISODate;
   /** diffDays(today, nextDue): negative = overdue by that many days */
   daysUntilDue?: number;
-  /** cadence in effect today (season-aware) */
-  frequencyDays: number;
+  /** interval in days (month = 30), null for a one-off */
+  frequencyDays: number | null;
+  /** newer partial sign-off than the last full one (never set on a `done` task) */
+  inProgress?: InProgress;
 }
 
-type SeasonHouse = Pick<House, 'rainyMonths'>;
-type FrequencyTask = Pick<Task, 'frequencyDays' | 'frequencyDaysBySeason'>;
-type ActiveTask = Pick<Task, 'activeMonths'>;
-type ScheduleTask = Pick<Task, 'id' | 'frequencyDays' | 'frequencyDaysBySeason' | 'activeMonths'>;
+type ScheduleTask = Pick<Task, 'id' | 'kind' | 'intervalCount' | 'intervalUnit' | 'dueOn'>;
+type IntervalTask = Pick<Task, 'kind' | 'intervalCount' | 'intervalUnit'>;
 
 // ---------------------------------------------------------------------------
-// Season & cadence
+// Intervals
 // ---------------------------------------------------------------------------
 
-export function seasonFor(date: ISODate, house: SeasonHouse): Season {
-  return house.rainyMonths.includes(monthOf(date)) ? 'rainy' : 'dry';
-}
-
-/** Cadence (days) that applies on `date`: the season override if any, else `frequencyDays`. */
-export function effectiveFrequency(task: FrequencyTask, date: ISODate, house: SeasonHouse): number {
-  return task.frequencyDaysBySeason?.[seasonFor(date, house)] ?? task.frequencyDays;
-}
-
-// ---------------------------------------------------------------------------
-// Active months
-// ---------------------------------------------------------------------------
-
-/** The set of active months, or null when the task runs all year. */
-function activeMonthSet(task: ActiveTask): ReadonlySet<number> | null {
-  const months = task.activeMonths;
-  if (!months || months.length === 0 || new Set(months).size >= 12) return null;
-  return new Set(months);
-}
-
-/** True unless the task has `activeMonths` and `date`'s month is not one of them. */
-export function isActive(task: ActiveTask, date: ISODate): boolean {
-  const months = activeMonthSet(task);
-  return months === null || months.has(monthOf(date));
-}
-
-/** `date` itself if active, else the 1st of the next active month. */
-export function firstActiveOnOrAfter(task: ActiveTask, date: ISODate): ISODate {
-  const months = activeMonthSet(task);
-  if (months === null || months.has(monthOf(date))) return date;
-  const ym = yearMonthOf(date);
-  for (let i = 1; i <= 12; i++) {
-    const next = addMonths(ym, i);
-    if (months.has(parseYearMonth(next).month)) return `${next}-01`;
-  }
-  // Unreachable: a non-null set always contains some month.
-  return date;
-}
+const DAYS_PER_UNIT = { day: 1, week: 7, month: 30 } as const;
 
 /**
- * First day of the contiguous active period containing `date` (which must be active), or null
- * when the task is active all year.
+ * Effective day count of a recurring task (a month counts as 30). Only for the due-soon window,
+ * daily detection and display. Due dates use `addInterval` (calendar months). Null for one-offs.
  */
-export function activePeriodStart(task: ActiveTask, date: ISODate): ISODate | null {
-  const months = activeMonthSet(task);
-  if (months === null) return null;
-  const ym = yearMonthOf(date);
-  for (let i = 1; i < 12; i++) {
-    const prev = addMonths(ym, -i);
-    if (!months.has(parseYearMonth(prev).month)) return `${addMonths(ym, -i + 1)}-01`;
+export function intervalDays(task: IntervalTask): number | null {
+  if (task.kind !== 'recurring' || task.intervalCount == null || task.intervalUnit == null) {
+    return null;
   }
-  // Unreachable: a non-null set is missing at least one month.
-  return null;
+  return task.intervalCount * DAYS_PER_UNIT[task.intervalUnit];
 }
 
-// ---------------------------------------------------------------------------
-// Due dates & status
-// ---------------------------------------------------------------------------
+/** A recurring task that comes round every day. */
+export function isDailyTask(task: IntervalTask): boolean {
+  return intervalDays(task) === 1;
+}
 
-/**
- * Next due date as seen on `today`, applying the dormant-period rules. Never done → due today
- * (or on the first active day if the task is dormant today).
- */
-export function nextDueDate(
-  task: Omit<ScheduleTask, 'id'>,
-  lastDone: ISODate | undefined,
-  today: ISODate,
-  house: SeasonHouse,
+/** `date` plus one interval of the task (calendar months, clamped to month end). */
+export function addInterval(
+  date: ISODate,
+  task: Pick<Task, 'intervalCount' | 'intervalUnit'>,
 ): ISODate {
-  if (lastDone === undefined) return firstActiveOnOrAfter(task, today);
-  const raw = addDays(lastDone, effectiveFrequency(task, lastDone, house));
-  if (raw > today) return firstActiveOnOrAfter(task, raw);
-  if (!isActive(task, today)) return firstActiveOnOrAfter(task, today);
-  const periodStart = activePeriodStart(task, today);
-  return periodStart !== null && raw < periodStart ? periodStart : raw;
+  if (task.intervalCount == null || task.intervalUnit == null) return date;
+  switch (task.intervalUnit) {
+    case 'day':
+      return addDays(date, task.intervalCount);
+    case 'week':
+      return addDays(date, 7 * task.intervalCount);
+    case 'month':
+      return addMonthsISO(date, task.intervalCount);
+  }
 }
 
-/** Latest completion per catalog task, ignoring ad-hoc rows and sign-offs dated after `today`. */
+function dueSoonWindow(task: IntervalTask): number {
+  const days = intervalDays(task);
+  return days === null ? DUE_SOON_DAYS : Math.max(0, Math.min(DUE_SOON_DAYS, days - 1));
+}
+
+// ---------------------------------------------------------------------------
+// Latest sign-offs
+// ---------------------------------------------------------------------------
+
+function isFull(c: CompletionLike): boolean {
+  return c.partial !== true;
+}
+
+/** `a` is newer than `b` by date, then by `createdAt` when both have it. */
+function isNewer(a: CompletionLike, b: CompletionLike): boolean {
+  if (a.doneOn !== b.doneOn) return a.doneOn > b.doneOn;
+  return a.createdAt !== undefined && b.createdAt !== undefined && a.createdAt > b.createdAt;
+}
+
+/** Latest full completion per catalog task, ignoring ad-hoc rows and sign-offs dated after `today`. */
 export function latestByTask<C extends CompletionLike>(
   completions: readonly C[],
   today?: ISODate,
 ): Map<TaskId, C> {
   const latest = new Map<TaskId, C>();
   for (const c of completions) {
-    if (c.taskId === null) continue;
+    if (c.taskId === null || !isFull(c)) continue;
     if (today !== undefined && c.doneOn > today) continue;
     const current = latest.get(c.taskId);
-    if (current === undefined || c.doneOn > current.doneOn) latest.set(c.taskId, c);
+    if (current === undefined || isNewer(c, current)) latest.set(c.taskId, c);
   }
   return latest;
 }
 
-function dueSoonWindow(frequency: number): number {
-  return Math.max(0, Math.min(DUE_SOON_DAYS, frequency - 1));
+/**
+ * Per task, the newest partial completion that is strictly newer than that task's latest full
+ * sign-off (or the newest partial when there is no full one).
+ */
+export function latestPartialByTask<C extends CompletionLike>(
+  completions: readonly C[],
+  today: ISODate,
+  latestFull: ReadonlyMap<TaskId, CompletionLike>,
+): Map<TaskId, C> {
+  const partials = new Map<TaskId, C>();
+  for (const c of completions) {
+    if (c.taskId === null || isFull(c) || c.doneOn > today) continue;
+    const current = partials.get(c.taskId);
+    if (current === undefined || isNewer(c, current)) partials.set(c.taskId, c);
+  }
+  for (const [taskId, partial] of partials) {
+    const full = latestFull.get(taskId);
+    if (full !== undefined && !isNewer(partial, full)) partials.delete(taskId);
+  }
+  return partials;
 }
 
-/** Status from an already-known latest completion (shared by taskStatus / taskStatuses). */
+// ---------------------------------------------------------------------------
+// Status
+// ---------------------------------------------------------------------------
+
+function dueState(daysUntilDue: number, window: number): TaskState {
+  if (daysUntilDue < 0) return 'overdue';
+  return daysUntilDue <= window ? 'due-soon' : 'ok';
+}
+
+/** Status from already-known latest completions (shared by taskStatus / taskStatuses). */
 export function statusFromLatest(
   task: ScheduleTask,
-  latest: CompletionLike | undefined,
+  latestFull: CompletionLike | undefined,
+  latestPartial: CompletionLike | undefined,
   today: ISODate,
-  house: SeasonHouse,
 ): TaskStatus {
-  const lastDone = latest?.doneOn;
-  const nextDue = nextDueDate(task, lastDone, today, house);
-  const daysUntilDue = diffDays(today, nextDue);
   const status: TaskStatus = {
     taskId: task.id,
-    state: 'ok',
-    nextDue,
-    daysUntilDue,
-    frequencyDays: effectiveFrequency(task, today, house),
+    state: 'never',
+    frequencyDays: intervalDays(task),
   };
-  if (lastDone !== undefined) status.lastDone = lastDone;
-  if (latest?.doneBy !== undefined) status.lastDoneBy = latest.doneBy;
+  if (latestFull) {
+    status.lastDone = latestFull.doneOn;
+    if (latestFull.doneBy !== undefined) status.lastDoneBy = latestFull.doneBy;
+  }
 
-  if (!isActive(task, today)) status.state = 'dormant';
-  else if (lastDone === undefined) status.state = 'never';
-  else if (daysUntilDue < 0) status.state = 'overdue';
-  else if (daysUntilDue <= dueSoonWindow(effectiveFrequency(task, lastDone, house)))
-    status.state = 'due-soon';
+  const setDue = (due: ISODate) => {
+    status.nextDue = due;
+    status.daysUntilDue = diffDays(today, due);
+  };
+
+  if (task.kind === 'once') {
+    if (latestFull) {
+      status.state = 'done';
+      return status;
+    }
+    if (task.dueOn) {
+      setDue(task.dueOn);
+      status.state = dueState(status.daysUntilDue ?? 0, DUE_SOON_DAYS);
+    } else {
+      setDue(today);
+    }
+  } else if (latestFull) {
+    setDue(addInterval(latestFull.doneOn, task));
+    status.state = dueState(status.daysUntilDue ?? 0, dueSoonWindow(task));
+  } else {
+    setDue(today);
+  }
+
+  if (latestPartial) {
+    status.inProgress = {
+      on: latestPartial.doneOn,
+      note: latestPartial.note ?? null,
+      by: latestPartial.doneBy ?? '',
+    };
+  }
   return status;
 }
 
@@ -184,10 +207,12 @@ export function taskStatus(
   task: ScheduleTask,
   completions: readonly CompletionLike[],
   today: ISODate,
-  house: SeasonHouse,
 ): TaskStatus {
-  const own = completions.filter((c) => c.taskId === task.id);
-  return statusFromLatest(task, latestByTask(own, today).get(task.id), today, house);
+  return taskStatuses(
+    [task],
+    completions.filter((c) => c.taskId === task.id),
+    today,
+  ).get(task.id) as TaskStatus;
 }
 
 /** Statuses for many tasks in one pass over the completions. */
@@ -195,13 +220,15 @@ export function taskStatuses(
   tasks: readonly ScheduleTask[],
   completions: readonly CompletionLike[],
   today: ISODate,
-  house: SeasonHouse,
 ): Map<TaskId, TaskStatus> {
-  const latest = latestByTask(completions, today);
-  return new Map(tasks.map((t) => [t.id, statusFromLatest(t, latest.get(t.id), today, house)]));
+  const full = latestByTask(completions, today);
+  const partial = latestPartialByTask(completions, today, full);
+  return new Map(
+    tasks.map((t) => [t.id, statusFromLatest(t, full.get(t.id), partial.get(t.id), today)]),
+  );
 }
 
-/** Sort rank: overdue & never first, then due-soon, ok, dormant. */
+/** Sort rank: overdue & never first, then due-soon, ok, done. */
 export function urgencyRank(state: TaskState): number {
   switch (state) {
     case 'overdue':
@@ -211,7 +238,7 @@ export function urgencyRank(state: TaskState): number {
       return 1;
     case 'ok':
       return 2;
-    case 'dormant':
+    case 'done':
       return 3;
   }
 }
@@ -228,49 +255,14 @@ export function compareByUrgency(
   return ad < bd ? -1 : ad > bd ? 1 : 0;
 }
 
-/** % on track = active tasks not overdue/never ÷ active tasks (100 when nothing is active). */
+/** % on track = open tasks not overdue/never ÷ open tasks (100 when nothing is open). */
 export function percentOnTrack(statuses: Iterable<Pick<TaskStatus, 'state'>>): number {
-  let active = 0;
+  let open = 0;
   let onTrack = 0;
   for (const s of statuses) {
-    if (s.state === 'dormant') continue;
-    active++;
+    if (s.state === 'done') continue;
+    open++;
     if (s.state === 'ok' || s.state === 'due-soon') onTrack++;
   }
-  return active === 0 ? 100 : Math.round((onTrack / active) * 100);
-}
-
-// ---------------------------------------------------------------------------
-// Calendar projection
-// ---------------------------------------------------------------------------
-
-/** Safety cap for projection loops (≈ 10 years of a daily task). */
-const MAX_PROJECTION_STEPS = 3700;
-
-/**
- * Projected due dates within [rangeStart, rangeEnd] (inclusive) for the calendar, assuming the
- * task is done on each due date. Projections never fall before `today`: an overdue or never-done
- * task is projected from today. Dormant months are skipped (resuming on the first active day),
- * and each step uses the cadence of the season it starts in.
- */
-export function projectDueDates(
-  task: Omit<ScheduleTask, 'id'>,
-  lastDone: ISODate | undefined,
-  rangeStart: ISODate,
-  rangeEnd: ISODate,
-  house: SeasonHouse,
-  today: ISODate,
-): ISODate[] {
-  const out: ISODate[] = [];
-  if (rangeEnd < rangeStart || rangeEnd < today) return out;
-  let cursor = maxISODate(nextDueDate(task, lastDone, today, house), today);
-  for (let step = 0; cursor <= rangeEnd && step < MAX_PROJECTION_STEPS; step++) {
-    if (!isActive(task, cursor)) {
-      cursor = firstActiveOnOrAfter(task, cursor);
-      continue;
-    }
-    if (cursor >= rangeStart) out.push(cursor);
-    cursor = addDays(cursor, effectiveFrequency(task, cursor, house));
-  }
-  return out;
+  return open === 0 ? 100 : Math.round((onTrack / open) * 100);
 }

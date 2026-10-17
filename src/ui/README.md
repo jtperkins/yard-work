@@ -21,8 +21,8 @@ The dev-only kitchen sink at **`/ui`** (`KitchenSink.tsx`) shows every component
 - **Tokens only.** Colours come from `src/styles/tokens.css` through the Tailwind names (`bg-surface`,
   `text-ink-muted`, `border-line`, `bg-primary`, …) or `var(--token)`. There are no raw hex values
   and no `dark:` variants, because the variables swap under `prefers-color-scheme`.
-- **Colour tokens as props.** Category colours are passed by token name (`color="cat-lawn"`), which
-  matches `house.json` → `categories[*].color`.
+- **Colour tokens as props.** Accent colours are passed by token name (`color="cat-lawn"`), never
+  as raw values.
 - **No router import.** Navigation components take a link component: `LinkButton`/`TextLink` via
   `as={Link} to="…"`, and `AppShell`/`NavBar`/`TabBar` via `linkComponent`.
 - **Accessible.** Real roles, keyboard support, visible `:focus-visible` rings, ≥ 40px touch targets
@@ -186,7 +186,7 @@ callers map their domain states onto it:
 | `good`     | on track / done          |
 | `info`     | planned                  |
 | `pending`  | never done / not started |
-| `inactive` | dormant / skipped        |
+| `inactive` | paused / skipped         |
 
 Props: `status`, `label`, `icon?` (overrides the default icon), `size`.
 
@@ -310,12 +310,25 @@ first option), `onValueChange`, `size` (`sm|md`).
 ### DateInput
 
 A native date picker with ISO `YYYY-MM-DD` values and a calendar icon. `value`, `onValueChange`,
-`max?` (e.g. today, to forbid future dates), `min?`.
+`max?` (e.g. today, to forbid future dates), `min?`. The `withTime` variant picks a date and a time
+of day (`datetime-local`, values like `2026-10-07T14:30` in the viewer's local time).
 
 ### ComboInput
 
 Free text with suggestions (input + `<datalist>`). It has `role="combobox"`. Props:
 `suggestions: string[]` (de-duplicated, blanks dropped) plus all Input props. Use it for "Done by".
+
+### FileInput
+
+A button that opens the native file picker (a hidden `<input type="file">` plus a `Button`).
+Props: `label` (button text and the input's accessible name), `onFiles(File[])`, `accept?`,
+`multiple?`, `disabled?`, `variant?`, `leadingIcon?`. The input resets after each pick, so the same
+file can be chosen again.
+
+### Disclosure
+
+A collapsible section: a toggle button with `aria-expanded` and a panel that is not mounted while
+collapsed. Props: `summary`, `defaultOpen?`, `children`.
 
 ### Checkbox
 
@@ -323,6 +336,16 @@ A native checkbox with a custom box. `checked`, `onCheckedChange(bool)`, `label`
 `strikeWhenChecked?` (packing-list style), `disabled`.
 
 ---
+
+## Attachments
+
+### AttachmentList
+
+A list of attached files. `items: { id, name, sizeLabel, href?, previewSrc?, status? }[]` where
+`status` is `uploading|failed|done`. Images with a `previewSrc` show a thumbnail, other files a file
+icon, and `href` makes the name a link. `onRemove(id)` adds a remove button on every item and
+`onRetry(id)` a retry button on failed ones. Strings are props (`label`, `uploadingLabel`,
+`failedLabel`, `removeLabel`, `retryLabel`).
 
 ## Overlays & feedback
 

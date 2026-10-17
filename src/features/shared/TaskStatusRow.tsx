@@ -3,9 +3,9 @@ import { paths } from '../../app/paths';
 import { useSession } from '../../api';
 import type { TaskStatus } from '../../domain/schedule';
 import { useT } from '../../i18n';
-import type { Task } from '../../shared/catalog-schema';
+import type { Task } from '../../shared/api-schemas';
 import type { ISODate } from '../../shared/dates';
-import { ChecklistRow, TextLink } from '../../ui';
+import { ChecklistRow, StatusPill, TextLink } from '../../ui';
 import { SignInCta } from './SignInCta';
 import { TaskStatusPill } from './TaskStatusPill';
 import { useTaskText } from './taskText';
@@ -21,8 +21,9 @@ export interface TaskStatusRowProps {
 }
 
 /**
- * A catalog task on a checklist: linked name, due text · area · time, status pill, category edge
- * and the sign-off action (or a sign-in prompt when signed out).
+ * A task on a checklist: linked name, due text · interval, status pill (plus "In progress" when
+ * a partial sign-off is newer than the last full one) and the sign-off action (or a sign-in
+ * prompt when signed out).
  */
 export function TaskStatusRow({
   task,
@@ -37,8 +38,7 @@ export function TaskStatusRow({
 
   const meta = [
     done ? text.lastDoneText(status, today) : text.dueText(status, today),
-    text.areaLabel(task.area),
-    text.minutes(task.estimatedMinutes),
+    text.frequencyText(task),
   ].join(' · ');
 
   const name = text.taskName(task);
@@ -50,8 +50,14 @@ export function TaskStatusRow({
         </TextLink>
       }
       meta={meta}
-      status={done ? undefined : <TaskStatusPill state={status.state} />}
-      color={text.categoryColor(task.category)}
+      status={
+        done ? undefined : (
+          <>
+            <TaskStatusPill state={status.state} />
+            {status.inProgress && <StatusPill status="info" label={t('status.inProgress')} />}
+          </>
+        )
+      }
       done={done}
       stampLabel={t('status.done')}
       signOffLabel={t('actions.signOff')}

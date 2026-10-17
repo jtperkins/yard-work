@@ -1,14 +1,13 @@
 /**
- * Display helpers for catalog tasks and their schedule status: status pill mapping, due text,
- * cadence text, relative days and category labels. Shared by the Board, Week, Tasks (and any
- * other) screens so the same state always reads the same way.
+ * Display helpers for tasks and their schedule status: status pill mapping, due text, interval
+ * text and relative days. Shared by the Board, Tasks and other screens so the same state always
+ * reads the same way.
  */
 import { useCallback, useMemo } from 'react';
 import type { TaskState, TaskStatus } from '../../domain/schedule';
-import { useCatalog } from '../../api';
-import { useLang, useT, type Lang, type TKey } from '../../i18n';
-import { l10n, type Category, type Task } from '../../shared/catalog-schema';
-import { diffDays, formatDate, localeFor, type ISODate } from '../../shared/dates';
+import { useLang, useT, localized, type TKey } from '../../i18n';
+import type { Task } from '../../shared/api-schemas';
+import { diffDays, formatDate, type ISODate } from '../../shared/dates';
 import type { Status } from '../../ui';
 
 export const STATE_VIEW: Record<TaskState, { status: Status; labelKey: TKey<'common'> }> = {
@@ -16,7 +15,7 @@ export const STATE_VIEW: Record<TaskState, { status: Status; labelKey: TKey<'com
   never: { status: 'pending', labelKey: 'status.never' },
   'due-soon': { status: 'warning', labelKey: 'status.dueSoon' },
   ok: { status: 'good', labelKey: 'status.ok' },
-  dormant: { status: 'inactive', labelKey: 'status.dormant' },
+  done: { status: 'good', labelKey: 'status.done' },
 };
 
 function lowerFirst(s: string): string {
@@ -27,51 +26,23 @@ function upperFirst(s: string): string {
   return s ? s.charAt(0).toLocaleUpperCase() + s.slice(1) : s;
 }
 
-/** Month numbers → compact ranges in a language, e.g. [12,1,2,3,4] → "Dec–Apr". */
-export function formatMonthRanges(months: readonly number[], lang: Lang): string {
-  const set = [...new Set(months)].filter((m) => m >= 1 && m <= 12).sort((a, b) => a - b);
-  if (set.length === 0 || set.length === 12) return '';
-  const name = (m: number) =>
-    new Intl.DateTimeFormat(localeFor(lang), { month: 'short', timeZone: 'UTC' })
-      .format(new Date(Date.UTC(2026, m - 1, 15)))
-      .replace('.', '');
-  // Build contiguous runs, treating Dec→Jan as contiguous (wrap-around).
-  const has = (m: number) => set.includes(((m - 1 + 12) % 12) + 1);
-  const starts = set.filter((m) => !has(m - 1));
-  const runs = starts.map((start) => {
-    let end = start;
-    while (has(end + 1) && (end % 12) + 1 !== start) end = (end % 12) + 1;
-    return [start, ((end - 1) % 12) + 1] as const;
-  });
-  return runs.map(([a, b]) => (a === b ? name(a) : `${name(a)}–${name(b)}`)).join(', ');
-}
-
 export interface TaskText {
   /** Pill status + translated label for a schedule state. */
   stateLabel: (state: TaskState) => string;
-  /** "3 days overdue", "Due tomorrow", "Out of season until 1 Dec", … */
+  /** "3 days overdue", "Due tomorrow", "Done 3 days ago", … */
   dueText: (status: TaskStatus, today: ISODate) => string;
-  /** "Every 7 days" or "Every 7 days in rainy season · every 14 days in dry season". */
+  /** "Every 2 weeks", "One-off", "One-off · due 30 Oct". */
   frequencyText: (task: Task) => string;
-  /** "Active Dec–Apr", or '' when the task runs all year. */
-  activeText: (task: Task) => string;
   /** "today", "yesterday", "3 days ago", or a short date for older days. */
   relativeDay: (date: ISODate, today: ISODate) => string;
   /** "Last done 3 days ago by JT" / "Never done". */
   lastDoneText: (status: TaskStatus, today: ISODate) => string;
-  /** "45 min". */
-  minutes: (n: number) => string;
-  categoryLabel: (category: Category) => string;
-  /** Colour token for a category, e.g. `cat-lawn`. */
-  categoryColor: (category: Category) => string;
-  areaLabel: (area: string) => string;
   taskName: (task: Task) => string;
 }
 
 export function useTaskText(): TaskText {
   const t = useT('common');
   const { lang } = useLang();
-  const { house } = useCatalog();
 
   const relativeDay = useCallback(
     (date: ISODate, today: ISODate) => {
@@ -94,12 +65,10 @@ export function useTaskText(): TaskText {
         switch (status.state) {
           case 'never':
             return t('due.never');
-          case 'dormant':
-            return status.nextDue
-              ? t('due.dormantUntil', {
-                  date: formatDate(status.nextDue, lang, { day: 'numeric', month: 'short' }),
-                })
-              : t('status.dormant');
+          case 'done':
+            return status.lastDone
+              ? t('due.doneOn', { when: relativeDay(status.lastDone, today) })
+              : t('status.done');
           default:
             if (days === undefined) return '';
             if (days < 0) return t('time.overdueBy', { count: -days });
@@ -114,20 +83,19 @@ export function useTaskText(): TaskText {
         }
       },
       frequencyText: (task) => {
-        const bySeason = task.frequencyDaysBySeason;
-        if (!bySeason || (bySeason.rainy === undefined && bySeason.dry === undefined)) {
-          return t('freq.every', { count: task.frequencyDays });
+        if (task.kind === 'once' || task.intervalCount == null || task.intervalUnit == null) {
+          return task.dueOn
+            ? t('freq.oneOffDue', {
+                date: formatDate(task.dueOn, lang, { day: 'numeric', month: 'short' }),
+              })
+            : t('freq.oneOff');
         }
-        const rainy = bySeason.rainy ?? task.frequencyDays;
-        const dry = bySeason.dry ?? task.frequencyDays;
-        if (rainy === dry) return t('freq.every', { count: rainy });
-        return upperFirst(
-          `${t('freq.inRainy', { count: rainy })} · ${t('freq.inDry', { count: dry })}`,
-        );
-      },
-      activeText: (task) => {
-        const months = task.activeMonths ? formatMonthRanges(task.activeMonths, lang) : '';
-        return months ? t('freq.activeMonths', { months }) : '';
+        const key = {
+          day: 'freq.everyDays',
+          week: 'freq.everyWeeks',
+          month: 'freq.everyMonths',
+        } as const;
+        return t(key[task.intervalUnit], { count: task.intervalCount });
       },
       relativeDay,
       lastDoneText: (status, today) => {
@@ -137,15 +105,8 @@ export function useTaskText(): TaskText {
           ? t('due.lastDoneBy', { when, name: status.lastDoneBy })
           : t('due.lastDone', { when });
       },
-      minutes: (n) => t('time.minutes', { count: n }),
-      categoryLabel: (category) => l10n(house.categories[category], lang),
-      categoryColor: (category) => house.categories[category].color,
-      areaLabel: (area) => {
-        const value = house.areas[area];
-        return value ? l10n(value, lang) : area;
-      },
-      taskName: (task) => l10n(task.name, lang),
+      taskName: (task) => localized(task.title, task.titleEs, lang),
     }),
-    [t, lang, house, relativeDay],
+    [t, lang, relativeDay],
   );
 }

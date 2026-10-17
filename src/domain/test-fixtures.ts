@@ -1,69 +1,54 @@
 /** Test-only builders for domain unit tests. */
-import type { House, Supply, Task } from '../shared/catalog-schema';
-import type { Completion } from '../shared/api-schemas';
-import type { PlanItemLike } from './types';
-
-export const HOUSE: Pick<House, 'rainyMonths'> = { rainyMonths: [5, 6, 7, 8, 9, 10, 11] };
-
-/** Dry season (Dec–Apr) months, as used by watering/painting tasks. */
-export const DRY_MONTHS = [12, 1, 2, 3, 4];
+import type { Completion, Task } from '../shared/api-schemas';
 
 export function makeTask(overrides: Partial<Task> & Pick<Task, 'id'>): Task {
   return {
-    name: { en: overrides.id, es: overrides.id },
-    category: 'garden',
-    area: 'whole-property',
-    frequencyDays: 14,
-    estimatedMinutes: 30,
-    who: 'anyone',
+    title: overrides.id,
+    titleEs: null,
+    steps: ['Do it'],
+    stepsEs: null,
+    safety: null,
+    kind: 'recurring',
+    intervalCount: 14,
+    intervalUnit: 'day',
+    dueOn: null,
     priority: 'normal',
-    instructions: { en: 'Do it', es: 'Hágalo' },
-    supplies: [],
-    confirmed: false,
+    archivedAt: null,
+    createdBy: 'test',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }
 
-export function makeSupply(id: string): Supply {
-  return { id, name: { en: id, es: id } };
+/** A one-off task (no interval), optionally with a due date. */
+export function makeOneOff(id: string, dueOn: string | null = null): Task {
+  return makeTask({ id, kind: 'once', intervalCount: null, intervalUnit: null, dueOn });
 }
 
 export function done(
   taskId: string | null,
   doneOn: string,
   doneBy = 'JT',
-): Pick<Completion, 'taskId' | 'doneOn' | 'doneBy'> {
-  return { taskId, doneOn, doneBy };
+  partial = false,
+): Pick<Completion, 'taskId' | 'doneOn' | 'doneBy' | 'partial'> {
+  return { taskId, doneOn, doneBy, partial };
 }
 
-export function planned(
-  taskId: string | null,
-  weekStart: string,
-  status: PlanItemLike['status'] = 'planned',
-): PlanItemLike {
-  return { taskId, weekStart, status };
+export function partialDone(
+  taskId: string,
+  doneOn: string,
+  note: string,
+  doneBy = 'JT',
+): Pick<Completion, 'taskId' | 'doneOn' | 'doneBy' | 'partial' | 'note'> {
+  return { taskId, doneOn, doneBy, partial: true, note };
 }
 
-/** Mow: 7 days in rainy season, 14 in dry. */
-export const MOW = makeTask({
-  id: 'mow-lawn',
-  category: 'lawn',
-  frequencyDays: 14,
-  frequencyDaysBySeason: { rainy: 7, dry: 14 },
-  priority: 'high',
-  who: 'yard',
-});
+/** Every 14 days. */
+export const CHAPIA = makeTask({ id: 'chapia', priority: 'high' });
 
-/** Daily cat care. */
-export const DAILY = makeTask({ id: 'daily-cat-care', category: 'cats', frequencyDays: 1 });
+/** Every day. */
+export const DAILY = makeTask({ id: 'daily', intervalCount: 1, intervalUnit: 'day' });
 
-/** Watering: every 3 days, dry season only. */
-export const WATER = makeTask({ id: 'water-garden', frequencyDays: 3, activeMonths: DRY_MONTHS });
-
-/** "Before rainy season" pattern: active March–April, long cadence. */
-export const ROOF = makeTask({
-  id: 'roof-inspection',
-  category: 'house',
-  frequencyDays: 300,
-  activeMonths: [3, 4],
-});
+/** Every 6 months. */
+export const RUST = makeTask({ id: 'rust-inspection', intervalCount: 6, intervalUnit: 'month' });

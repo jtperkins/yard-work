@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Download, FilterX, ScrollText, Trash2 } from 'lucide-react';
-import { useCatalog, useCompletions, useSession } from '../../api';
+import { useCompletions, useSession, useTasks } from '../../api';
 import { paths } from '../../app/paths';
 import { useLang, useT } from '../../i18n';
 import type { Completion } from '../../shared/api-schemas';
-import { CATEGORIES } from '../../shared/catalog-schema';
 import { formatDate, todayCR, type ISODate } from '../../shared/dates';
 import {
   Badge,
   Button,
   Card,
-  CategoryChip,
   DateInput,
   EmptyState,
   Field,
@@ -30,7 +28,7 @@ import {
 import { SignInCta } from '../shared';
 import { buildLogCsv, logCsvFilename } from './csv';
 import { DeleteSignOffDialog } from './DeleteSignOffDialog';
-import { categoryLabel, describeWork } from './describe';
+import { describeWork } from './describe';
 import { downloadTextFile } from './download';
 import {
   defaultFilters,
@@ -41,11 +39,11 @@ import {
   peopleOf,
   readFilters,
   writeFilters,
-  type LogCategoryFilter,
   type LogFilters,
 } from './filters';
 import { capitalize } from './format';
 import { LoadError } from './LoadError';
+import { taskMap } from './taskMap';
 
 /** Rows rendered before "Show more". */
 const PAGE_SIZE = 60;
@@ -54,7 +52,8 @@ export function LogScreen() {
   const t = useT('log');
   const tc = useT('common');
   const { lang } = useLang();
-  const catalog = useCatalog();
+  // Every task including archived ones, so old sign-offs keep their titles.
+  const tasks = useTasks({ archived: true });
   const session = useSession();
   const today = todayCR();
   const [params, setParams] = useSearchParams();
@@ -69,10 +68,8 @@ export function LogScreen() {
   const [toDelete, setToDelete] = useState<Completion | null>(null);
 
   const all = query.data;
-  const rows = useMemo(
-    () => filterCompletions(all ?? [], filters, catalog.taskById),
-    [all, filters, catalog.taskById],
-  );
+  const taskById = useMemo(() => taskMap(tasks.data), [tasks.data]);
+  const rows = useMemo(() => filterCompletions(all ?? [], filters), [all, filters]);
   const groups = useMemo(() => groupByDay(rows.slice(0, limit)), [rows, limit]);
 
   const personOptions = useMemo<SelectOption[]>(() => {
@@ -83,11 +80,6 @@ export function LogScreen() {
     return names.map((name) => ({ value: name, label: name }));
   }, [all, filters.person]);
 
-  const categoryOptions: SelectOption[] = [
-    ...CATEGORIES.map((c) => ({ value: c, label: categoryLabel(catalog, c, lang) })),
-    { value: 'adhoc', label: t('filters.adHoc') },
-  ];
-
   const update = (patch: Partial<LogFilters>) => {
     setParams(writeFilters({ ...filters, ...patch }, today), { replace: true });
     setLimit(PAGE_SIZE);
@@ -95,13 +87,13 @@ export function LogScreen() {
 
   const exportCsv = () => {
     const csv = buildLogCsv(rows, {
-      catalog,
+      taskById,
       lang,
-      adHocLabel: t('csv.adHoc'),
+      partialLabel: t('csv.partial'),
       headers: {
         date: t('csv.date'),
         task: t('csv.task'),
-        category: t('csv.category'),
+        partial: t('csv.partial'),
         doneBy: t('csv.doneBy'),
         signedBy: t('csv.signedBy'),
         note: t('csv.note'),
@@ -152,7 +144,7 @@ export function LogScreen() {
 
       <Card as="section" padding="sm" aria-label={t('filters.label')}>
         <Stack gap="sm">
-          <Grid cols={1} smCols={2} lgCols={4} gap="sm">
+          <Grid cols={1} smCols={3} gap="sm">
             <Field label={tc('fields.person')}>
               <Select
                 size="sm"
@@ -163,15 +155,6 @@ export function LogScreen() {
                     ?.value ?? ''
                 }
                 onValueChange={(person) => update({ person })}
-              />
-            </Field>
-            <Field label={tc('fields.category')}>
-              <Select
-                size="sm"
-                placeholder={tc('category.all')}
-                options={categoryOptions}
-                value={filters.category}
-                onValueChange={(category) => update({ category: category as LogCategoryFilter })}
               />
             </Field>
             <Field label={tc('fields.from')}>
@@ -211,9 +194,15 @@ export function LogScreen() {
         </Stack>
       </Card>
 
-      {query.isError ? (
-        <LoadError title={t('loadError')} onRetry={() => void query.refetch()} />
-      ) : !all && !invalidRange ? (
+      {query.isError || tasks.isError ? (
+        <LoadError
+          title={t('loadError')}
+          onRetry={() => {
+            void query.refetch();
+            void tasks.refetch();
+          }}
+        />
+      ) : (!all && !invalidRange) || tasks.isPending ? (
         <div aria-busy="true" aria-label={tc('a11y.loading')}>
           <SkeletonText lines={8} />
         </div>
@@ -233,12 +222,11 @@ export function LogScreen() {
                 aside={t('group.count', { count: group.items.length })}
               >
                 {group.items.map((c) => {
-                  const work = describeWork(c, catalog, lang);
+                  const work = describeWork(c, taskById, lang);
                   const same = c.doneBy.trim().toLowerCase() === c.loggedBy.trim().toLowerCase();
                   return (
                     <LogRow
                       key={c.id}
-                      color={work.color}
                       title={
                         work.task ? (
                           <TextLink as={Link} to={paths.task(work.task.id)}>
@@ -249,16 +237,18 @@ export function LogScreen() {
                         )
                       }
                       badges={
-                        work.category ? (
-                          <CategoryChip
-                            label={categoryLabel(catalog, work.category, lang)}
-                            color={work.color ?? 'line-strong'}
-                          />
-                        ) : work.adHoc ? (
-                          <Badge size="sm" tone="neutral" variant="outline">
-                            {t('row.adHoc')}
-                          </Badge>
-                        ) : undefined
+                        <>
+                          {c.partial && (
+                            <Badge size="sm" tone="info">
+                              {tc('status.partial')}
+                            </Badge>
+                          )}
+                          {work.adHoc && (
+                            <Badge size="sm" tone="neutral" variant="outline">
+                              {t('row.adHoc')}
+                            </Badge>
+                          )}
+                        </>
                       }
                       meta={
                         same

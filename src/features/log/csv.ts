@@ -1,7 +1,6 @@
-import type { Catalog } from '../../domain/catalog';
-import type { Completion } from '../../shared/api-schemas';
-import type { Lang } from '../../shared/catalog-schema';
-import { categoryLabel, describeWork } from './describe';
+import type { Completion, Task, TaskId } from '../../shared/api-schemas';
+import type { Lang } from '../../shared/lang';
+import { describeWork } from './describe';
 
 export type CsvCell = string | number | null | undefined;
 
@@ -29,7 +28,7 @@ export function toCsv(rows: readonly (readonly CsvCell[])[]): string {
 export interface LogCsvHeaders {
   date: string;
   task: string;
-  category: string;
+  partial: string;
   doneBy: string;
   signedBy: string;
   note: string;
@@ -38,20 +37,21 @@ export interface LogCsvHeaders {
 }
 
 export interface LogCsvOptions {
-  catalog: Pick<Catalog, 'taskById' | 'house'>;
+  /** Every task including archived ones, so history keeps its titles. */
+  taskById: ReadonlyMap<TaskId, Task>;
   lang: Lang;
   headers: LogCsvHeaders;
-  /** Category column text for ad-hoc work. */
-  adHocLabel: string;
+  /** Text in the partial column for partial sign-offs (full ones stay empty). */
+  partialLabel: string;
 }
 
 /** The log as CSV, one row per sign-off in the given order, names in `lang`. */
 export function buildLogCsv(completions: readonly Completion[], options: LogCsvOptions): string {
-  const { catalog, lang, headers, adHocLabel } = options;
+  const { taskById, lang, headers, partialLabel } = options;
   const header = [
     headers.date,
     headers.task,
-    headers.category,
+    headers.partial,
     headers.doneBy,
     headers.signedBy,
     headers.note,
@@ -59,13 +59,17 @@ export function buildLogCsv(completions: readonly Completion[], options: LogCsvO
     headers.loggedAt,
   ];
   const rows = completions.map((c) => {
-    const work = describeWork(c, catalog, lang);
-    const category = work.category
-      ? categoryLabel(catalog, work.category, lang)
-      : work.adHoc
-        ? adHocLabel
-        : '';
-    return [c.doneOn, work.title, category, c.doneBy, c.loggedBy, c.note, c.taskId, c.createdAt];
+    const work = describeWork(c, taskById, lang);
+    return [
+      c.doneOn,
+      work.title,
+      c.partial ? partialLabel : '',
+      c.doneBy,
+      c.loggedBy,
+      c.note,
+      c.taskId,
+      c.createdAt,
+    ];
   });
   return toCsv([header, ...rows]);
 }

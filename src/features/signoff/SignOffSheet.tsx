@@ -1,25 +1,18 @@
 import { Stamp } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
-import {
-  newId,
-  useCatalog,
-  useLatestCompletions,
-  useSession,
-  useSignOff,
-  useUndoSignOff,
-} from '../../api';
-import { useLang, useT } from '../../i18n';
-import { LIMITS } from '../../shared/api-schemas';
-import { l10n, type Task } from '../../shared/catalog-schema';
+import { newId, useLatestCompletions, useSession, useSignOff, useUndoSignOff } from '../../api';
+import { useT } from '../../i18n';
+import { LIMITS, type Task } from '../../shared/api-schemas';
 import { compareISODate, isISODate, type ISODate } from '../../shared/dates';
+import { KNOWN_PEOPLE } from '../../shared/people';
 import {
   Badge,
   Button,
-  CategoryChip,
   ComboInput,
   DateInput,
   Field,
   Sheet,
+  SegmentedControl,
   Stack,
   Text,
   Textarea,
@@ -27,6 +20,7 @@ import {
 } from '../../ui';
 import { SignInCta } from '../shared/SignInCta';
 import { useErrorMessage } from '../shared/errors';
+import { useTaskText } from '../shared/taskText';
 import { useToday } from '../shared/today';
 
 /**
@@ -35,11 +29,10 @@ import { useToday } from '../shared/today';
  *
  * Bottom sheet (mobile) / dialog (desktop) for signing off a piece of work:
  * fields "Done by" (default `defaultDoneBy`, else the session name; suggestions from
- * house.people + recent names), "Date" (default today in CR, may be backdated, never future)
- * and an optional "Note". Submitting calls the `useSignOff` mutation (src/api) with a
+ * KNOWN_PEOPLE + recent names), "Date" (default today in CR, may be backdated, never future)
+ * and a "Note". "Partially done" records progress without finishing the task and needs a note
+ * saying what is left. Submitting calls the `useSignOff` mutation (src/api) with a
  * client-generated id, shows an Undo toast, then calls `onClose`.
- *
- * Exactly one of `task` (catalog task) or `adHocTitle` (ad-hoc work) identifies the work.
  *
  * Needs a `ToastProvider` above it (the app mounts `AppToastProvider`).
  */
@@ -48,20 +41,16 @@ export interface SignOffSheetProps {
   open: boolean;
   /** Called when the sheet should close (cancel, Esc, backdrop, or after a successful sign-off). */
   onClose: () => void;
-  /** Catalog task being signed off; `null` for ad-hoc work (then `adHocTitle` is required). */
+  /** Task being signed off (nothing is rendered while `null`). */
   task: Task | null;
-  /** Title of ad-hoc (non-catalog) work, used when `task` is `null`. */
-  adHocTitle?: string;
-  /** Plan item this sign-off fulfils (Week screen). The server links + marks it done. */
-  planItemId?: string;
-  /** Pre-filled "Done by" (e.g. the plan item's assignee). Defaults to the session name. */
+  /** Pre-filled "Done by". Defaults to the session name. */
   defaultDoneBy?: string;
 }
 
 export function SignOffSheet(props: SignOffSheetProps) {
   // Mount the form only while open so every opening starts from fresh defaults.
-  if (!props.open) return null;
-  return <SignOffSheetOpen {...props} />;
+  if (!props.open || !props.task) return null;
+  return <SignOffSheetOpen {...props} task={props.task} />;
 }
 
 interface Errors {
@@ -70,16 +59,9 @@ interface Errors {
   note?: string;
 }
 
-function SignOffSheetOpen({
-  onClose,
-  task,
-  adHocTitle,
-  planItemId,
-  defaultDoneBy,
-}: SignOffSheetProps) {
+function SignOffSheetOpen({ onClose, task, defaultDoneBy }: SignOffSheetProps & { task: Task }) {
   const t = useT('common');
-  const { lang } = useLang();
-  const { house } = useCatalog();
+  const text = useTaskText();
   const session = useSession();
   const latest = useLatestCompletions();
   const signOff = useSignOff();
@@ -93,19 +75,20 @@ function SignOffSheetOpen({
   const [doneByInput, setDoneBy] = useState<string | null>(null);
   const doneBy = doneByInput ?? defaultDoneBy ?? session.name ?? '';
   const [doneOn, setDoneOn] = useState<ISODate>(today);
+  const [kind, setKind] = useState<'done' | 'partial'>('done');
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState<Errors>({});
 
-  const workTitle = task ? l10n(task.name, lang) : (adHocTitle ?? '');
-  const category = task ? house.categories[task.category] : undefined;
+  const workTitle = text.taskName(task);
+  const partial = kind === 'partial';
 
   const suggestions = useMemo(() => {
     const recent = (latest.data ?? [])
       .slice()
       .sort((a, b) => compareISODate(b.doneOn, a.doneOn))
       .map((c) => c.doneBy);
-    return [...(session.name ? [session.name] : []), ...house.people, ...recent];
-  }, [latest.data, house.people, session.name]);
+    return [...(session.name ? [session.name] : []), ...KNOWN_PEOPLE, ...recent];
+  }, [latest.data, session.name]);
 
   function validate(): Errors {
     const next: Errors = {};
@@ -114,7 +97,9 @@ function SignOffSheetOpen({
     else if (who.length > LIMITS.name) next.doneBy = t('errors.tooLong', { max: LIMITS.name });
     if (!doneOn || !isISODate(doneOn)) next.doneOn = t('errors.required');
     else if (compareISODate(doneOn, today) > 0) next.doneOn = t('errors.futureDate');
-    if (note.trim().length > LIMITS.note) next.note = t('errors.tooLong', { max: LIMITS.note });
+    if (partial && !note.trim()) next.note = t('signOff.whatsLeftRequired');
+    else if (note.trim().length > LIMITS.note)
+      next.note = t('errors.tooLong', { max: LIMITS.note });
     return next;
   }
 
@@ -129,11 +114,11 @@ function SignOffSheetOpen({
     const saved = signOff
       .mutateAsync({
         id,
-        ...(task ? { taskId: task.id } : { title: workTitle }),
+        taskId: task.id,
         doneOn,
         doneBy: who,
         note: note.trim() || undefined,
-        planItemId,
+        ...(partial ? { partial: true } : {}),
       })
       .then(
         () => true,
@@ -149,7 +134,7 @@ function SignOffSheetOpen({
 
     toast({
       tone: 'success',
-      title: t('signOff.toast', { task: workTitle }),
+      title: t(partial ? 'signOff.toastPartial' : 'signOff.toast', { task: workTitle }),
       description: t('signOff.toastBy', { name: who }),
       action: {
         label: t('actions.undo'),
@@ -185,7 +170,7 @@ function SignOffSheetOpen({
         signedOut ? undefined : (
           <>
             <Button type="submit" form={formId} leadingIcon={Stamp} disabled={session.isPending}>
-              {t('signOff.submit')}
+              {t(partial ? 'signOff.submitPartial' : 'signOff.submit')}
             </Button>
             <Button variant="ghost" onClick={onClose}>
               {t('actions.cancel')}
@@ -200,18 +185,9 @@ function SignOffSheetOpen({
             {workTitle}
           </Text>
           <Stack direction="row" gap="sm" wrap align="center">
-            {category ? (
-              <CategoryChip label={l10n(category, lang)} color={category.color} size="sm" />
-            ) : (
-              <Badge tone="neutral" size="sm">
-                {t('signOff.adHoc')}
-              </Badge>
-            )}
-            {planItemId && (
-              <Badge tone="info" size="sm">
-                {t('signOff.fromPlan')}
-              </Badge>
-            )}
+            <Badge tone="neutral" size="sm">
+              {text.frequencyText(task)}
+            </Badge>
           </Stack>
         </Stack>
 
@@ -222,6 +198,16 @@ function SignOffSheetOpen({
           </Stack>
         ) : (
           <Stack as="form" id={formId} gap="md" onSubmit={submit} noValidate>
+            <SegmentedControl
+              label={t('signOff.kind')}
+              value={kind}
+              onChange={setKind}
+              fullWidth
+              options={[
+                { value: 'done', label: t('signOff.kindDone') },
+                { value: 'partial', label: t('signOff.kindPartial') },
+              ]}
+            />
             <Field
               label={t('fields.doneBy')}
               hint={t('signOff.doneByHint')}
@@ -245,8 +231,10 @@ function SignOffSheetOpen({
               <DateInput value={doneOn} onValueChange={setDoneOn} max={today} />
             </Field>
             <Field
-              label={t('fields.note')}
-              optionalLabel={t('fields.optional')}
+              label={partial ? t('signOff.whatsLeft') : t('fields.note')}
+              hint={partial ? t('signOff.whatsLeftHint') : undefined}
+              optionalLabel={partial ? undefined : t('fields.optional')}
+              required={partial}
               error={errors.note}
             >
               <Textarea

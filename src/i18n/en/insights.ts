@@ -9,10 +9,6 @@ const insights = {
   'stats.last30Hint': '{count} in the 30 before',
   'stats.activeDays': 'Days with work done',
   'stats.activeDaysHint': 'In the last 12 months',
-  'stats.onTime': 'Done on time',
-  'stats.onTimeHint_one': 'Across {count} repeat sign-off',
-  'stats.onTimeHint_other': 'Across {count} repeat sign-offs',
-  'stats.onTimeNone': 'Not enough repeats yet',
   'stats.onTrack': 'Tasks on track',
   'stats.onTrackHint': 'Not overdue right now',
 
@@ -25,12 +21,6 @@ const insights = {
   'heatmap.more': 'More',
   'heatmap.dateColumn': 'Date',
   'heatmap.countColumn': 'Sign-offs',
-
-  'onTime.title': 'On-time rate by category',
-  'onTime.description':
-    'Share of repeat sign-offs done by the due date, with 20% grace on the cadence.',
-  'onTime.detail': '{onTime} of {total} on time',
-  'onTime.none': 'No repeats yet',
 
   'byPerson.title': 'Who’s doing the work',
   'byPerson.description':

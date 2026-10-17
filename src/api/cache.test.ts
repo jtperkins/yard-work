@@ -1,18 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  applyPlanPatch,
   completionMatchesRange,
   insertCompletion,
   insertNote,
-  markPlanItemDone,
   newestForTask,
   removeFromLatest,
-  revertPlanItemsForCompletion,
   upsertLatest,
 } from './cache';
-import { makeCompletion, makeNote, makePlanItem } from './test-utils';
-
-const NOW = '2026-10-07T18:00:00.000Z';
+import { makeCompletion, makeNote } from './test-utils';
 
 describe('completion cache transforms', () => {
   it('inserts in server order (doneOn desc, createdAt desc) and replaces by id', () => {
@@ -25,19 +20,19 @@ describe('completion cache transforms', () => {
   });
 
   it('matches ranges on from, to and task', () => {
-    const c = makeCompletion({ doneOn: '2026-10-02', taskId: 'mow-lawn' });
+    const c = makeCompletion({ doneOn: '2026-10-02', taskId: 'chapia' });
     expect(completionMatchesRange(c, {})).toBe(true);
     expect(completionMatchesRange(c, { from: '2026-10-03' })).toBe(false);
     expect(completionMatchesRange(c, { to: '2026-10-01' })).toBe(false);
-    expect(completionMatchesRange(c, { task: 'trash-out' })).toBe(false);
+    expect(completionMatchesRange(c, { task: 'other-task' })).toBe(false);
     expect(
-      completionMatchesRange(c, { from: '2026-10-02', to: '2026-10-02', task: 'mow-lawn' }),
+      completionMatchesRange(c, { from: '2026-10-02', to: '2026-10-02', task: 'chapia' }),
     ).toBe(true);
   });
 
   it('upsertLatest replaces an older entry, keeps a newer one and ignores ad-hoc work', () => {
     const old = makeCompletion({ doneOn: '2026-09-20' });
-    const other = makeCompletion({ taskId: 'trash-out', doneOn: '2026-10-01' });
+    const other = makeCompletion({ taskId: 'other-task', doneOn: '2026-10-01' });
     const fresh = makeCompletion({ doneOn: '2026-10-06' });
 
     const up = upsertLatest([other, old], fresh);
@@ -55,7 +50,7 @@ describe('completion cache transforms', () => {
     const prev = makeCompletion({ doneOn: '2026-09-20' });
     expect(removeFromLatest([fresh], fresh.id, prev)).toEqual([prev]);
     expect(removeFromLatest([fresh], fresh.id, undefined)).toEqual([]);
-    expect(removeFromLatest([fresh], fresh.id, makeCompletion({ taskId: 'trash-out' }))).toEqual(
+    expect(removeFromLatest([fresh], fresh.id, makeCompletion({ taskId: 'other-task' }))).toEqual(
       [],
     );
     expect(removeFromLatest([fresh], 'missing', prev)).toEqual([fresh]);
@@ -65,40 +60,52 @@ describe('completion cache transforms', () => {
     const a = makeCompletion({ doneOn: '2026-09-01' });
     const b = makeCompletion({ doneOn: '2026-09-15' });
     const gone = makeCompletion({ doneOn: '2026-10-01' });
-    expect(newestForTask([[a], [b, gone]], 'mow-lawn', gone.id)).toBe(b);
-    expect(newestForTask([[a]], 'trash-out', gone.id)).toBeUndefined();
+    expect(newestForTask([[a], [b, gone]], 'chapia', gone.id, false)).toBe(b);
+    expect(newestForTask([[a]], 'other-task', gone.id, false)).toBeUndefined();
   });
 });
 
-describe('plan cache transforms', () => {
-  it('marks done and reverts by completion id', () => {
-    const item = makePlanItem();
-    const done = markPlanItemDone(
-      [item],
-      item.id,
-      { id: 'c1', doneOn: '2026-10-06', doneBy: 'Yard worker' },
-      NOW,
-    );
-    expect(done[0]).toMatchObject({
-      status: 'done',
-      completion: { id: 'c1', doneOn: '2026-10-06', doneBy: 'Yard worker' },
-      updatedAt: NOW,
-    });
-    expect(revertPlanItemsForCompletion(done, 'c1', NOW)[0]).toMatchObject({
-      status: 'planned',
-      completion: null,
-    });
+describe('partial sign-offs in the latest list', () => {
+  it('upsertLatest keeps the full entry and adds the partial one beside it', () => {
+    const full = makeCompletion({ taskId: 't', doneOn: '2026-09-20' });
+    const partial = makeCompletion({ taskId: 't', doneOn: '2026-10-01', partial: true });
+    const up = upsertLatest([full], partial);
+    expect(up.changed).toBe(true);
+    expect(up.replaced).toBeUndefined();
+    expect(up.list.map((c) => c.id)).toEqual([partial.id, full.id]);
+
+    const newerPartial = makeCompletion({ taskId: 't', doneOn: '2026-10-05', partial: true });
+    const again = upsertLatest(up.list, newerPartial);
+    expect(again.replaced).toBe(partial);
+    expect(again.list.map((c) => c.id)).toEqual([newerPartial.id, full.id]);
   });
 
-  it('applies parsed patches: undefined keeps, null clears', () => {
-    const item = makePlanItem({ assignee: 'JT', note: 'front only' });
-    expect(
-      applyPlanPatch(item, { assignee: undefined, note: null, status: 'skipped' }, NOW),
-    ).toMatchObject({
-      assignee: 'JT',
-      note: null,
-      status: 'skipped',
-    });
+  it('a full sign-off does not displace the partial entry either', () => {
+    const partial = makeCompletion({ taskId: 't', doneOn: '2026-10-01', partial: true });
+    const full = makeCompletion({ taskId: 't', doneOn: '2026-10-02' });
+    const up = upsertLatest([partial], full);
+    expect(up.list.map((c) => c.id)).toEqual([full.id, partial.id]);
+    expect(up.replaced).toBeUndefined();
+  });
+
+  it('removeFromLatest of a partial leaves the full entry and ignores a full fallback', () => {
+    const full = makeCompletion({ taskId: 't', doneOn: '2026-09-20' });
+    const partial = makeCompletion({ taskId: 't', doneOn: '2026-10-01', partial: true });
+    expect(removeFromLatest([partial, full], partial.id, undefined)).toEqual([full]);
+    expect(removeFromLatest([partial, full], partial.id, full)).toEqual([full]);
+    const olderPartial = makeCompletion({ taskId: 't', doneOn: '2026-09-25', partial: true });
+    expect(removeFromLatest([partial, full], partial.id, olderPartial).map((c) => c.id)).toEqual([
+      olderPartial.id,
+      full.id,
+    ]);
+  });
+
+  it('newestForTask only considers rows of the asked kind', () => {
+    const full = makeCompletion({ taskId: 't', doneOn: '2026-10-09' });
+    const partial = makeCompletion({ taskId: 't', doneOn: '2026-10-01', partial: true });
+    expect(newestForTask([[full, partial]], 't', 'x', true)).toBe(partial);
+    expect(newestForTask([[full, partial]], 't', 'x', false)).toBe(full);
+    expect(newestForTask([[full]], 't', 'x', true)).toBeUndefined();
   });
 });
 

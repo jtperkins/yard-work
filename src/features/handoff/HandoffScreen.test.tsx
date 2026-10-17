@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, makeCompletion, makeNote } from '../../api/test-utils';
 import type { FakeApi } from '../../api/test-utils';
+import { makeTask } from '../../domain/test-fixtures';
 import { renderScreen } from '../log/screen-test-utils';
 import { HandoffScreen } from './HandoffScreen';
 
@@ -24,15 +25,17 @@ const recent = makeNote({
 function routes(api: FakeApi) {
   let notes = [pinned, recent];
   api.on('GET /api/notes', () => jsonResponse({ notes }));
+  const tasks = [makeTask({ id: 'chapia', title: 'Chapia' }), makeTask({ id: 'sweep' })];
+  api.on('GET /api/tasks', () => jsonResponse({ tasks }));
   api.on('GET /api/completions/latest', () =>
     jsonResponse({
-      completions: [makeCompletion({ taskId: 'mow-lawn', doneOn: '2026-09-01' })],
+      completions: [makeCompletion({ taskId: 'chapia', doneOn: '2026-09-01' })],
     }),
   );
   api.on('GET /api/completions', () =>
     jsonResponse({
       completions: [
-        makeCompletion({ taskId: 'trash-out', doneOn: '2026-10-05', doneBy: 'Yard worker' }),
+        makeCompletion({ taskId: 'sweep', doneOn: '2026-10-05', doneBy: 'Yard worker' }),
       ],
     }),
   );

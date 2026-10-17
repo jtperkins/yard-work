@@ -86,6 +86,14 @@ export { ComboInput } from './ComboInput';
 export type { ComboInputProps } from './ComboInput';
 export { Checkbox } from './Checkbox';
 export type { CheckboxProps } from './Checkbox';
+export { FileInput } from './FileInput';
+export type { FileInputProps } from './FileInput';
+
+// Attachments & disclosure
+export { AttachmentList } from './AttachmentList';
+export type { AttachmentItem, AttachmentListProps } from './AttachmentList';
+export { Disclosure } from './Disclosure';
+export type { DisclosureProps } from './Disclosure';
 
 // Overlays & feedback
 export { Dialog, Sheet, ConfirmDialog } from './Dialog';

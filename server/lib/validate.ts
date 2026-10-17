@@ -1,29 +1,19 @@
 /**
  * Request validation on top of the shared zod schemas (src/shared/api-schemas.ts), plus
- * catalog task-id checks against the bundled data/tasks.json.
+ * task-id checks against the tasks table.
  */
 import type { z } from 'zod';
-import tasksJson from '../../data/tasks.json';
-import { idSchema } from '../../src/shared/api-schemas';
+import { idSchema, taskIdSchema } from '../../src/shared/api-schemas';
 import { HttpError, badRequest, notFound } from './http';
+import { taskIdExists } from './repo';
 
 /** Max accepted JSON body (largest legit body is a 4,000-char note). */
 export const MAX_BODY_BYTES = 32 * 1024;
 
-/** Task ids from the catalog bundled into the Functions build. */
-export const KNOWN_TASK_IDS: ReadonlySet<string> = new Set(
-  (tasksJson as ReadonlyArray<{ id: string }>).map((t) => t.id),
-);
-
-export function isKnownTaskId(id: string): boolean {
-  return KNOWN_TASK_IDS.has(id);
-}
-
-/** Throws 400 when `taskId` is set but not in the catalog. */
-export function assertKnownTask(taskId: string | undefined): void {
-  if (taskId !== undefined && !isKnownTaskId(taskId)) {
-    throw badRequest(`taskId: unknown task "${taskId}"`);
-  }
+/** Throws 400 when `taskId` is set but no task (archived ones included) has that id. */
+export async function assertKnownTask(db: D1Database, taskId: string | undefined): Promise<void> {
+  if (taskId === undefined) return;
+  if (!(await taskIdExists(db, taskId))) throw badRequest(`taskId: unknown task "${taskId}"`);
 }
 
 /** `field: message; field2: message` from a zod error (first few issues). */
@@ -74,9 +64,21 @@ export function readQuery<S extends z.ZodType>(request: Request, schema: S): z.o
   return parseWith(schema, Object.fromEntries(params));
 }
 
-/** A route `:id` param that must be a UUID — anything else can't exist, so 404. */
-export function readIdParam(params: Record<string, string | string[]>, name = 'id'): string {
+type RouteParams = Record<string, string | string[]>;
+
+/** A route param that must match `schema` — anything else can't exist, so 404. */
+function readParam(params: RouteParams, name: string, schema: z.ZodType): string {
   const value = params[name];
-  if (typeof value !== 'string' || !idSchema.safeParse(value).success) throw notFound();
+  if (typeof value !== 'string' || !schema.safeParse(value).success) throw notFound();
   return value;
+}
+
+/** A route `:id` param that must be a UUID. */
+export function readIdParam(params: RouteParams, name = 'id'): string {
+  return readParam(params, name, idSchema);
+}
+
+/** A route `:id` param that must be a task slug. */
+export function readSlugParam(params: RouteParams, name = 'id'): string {
+  return readParam(params, name, taskIdSchema);
 }

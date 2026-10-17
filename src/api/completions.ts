@@ -2,9 +2,9 @@
  * Completion (sign-off) queries and mutations, plus the derived task-status hook.
  *
  * Sign-off is optimistic: the new row appears at once in every cached completions list whose
- * range contains it, in the latest-per-task list (so Board/Tasks statuses flip immediately) and on
- * the plan item it fulfils (explicit `planItemId`, or the `planned` item for that task in the
- * week of `doneOn`, mirroring the server's auto-link). Errors roll everything back.
+ * range contains it and in the latest-per-task list (so Board/Tasks statuses flip immediately).
+ * A partial sign-off lands as its own entry and never displaces the last full one. Errors roll
+ * everything back.
  */
 import {
   queryOptions,
@@ -13,38 +13,36 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   compareByUrgency,
   percentOnTrack,
   taskStatuses,
   type TaskStatus,
 } from '../domain/schedule';
-import type { House, Task, TaskId } from '../shared/catalog-schema';
 import {
   createCompletionReqSchema,
   type Completion,
   type CompletionsQuery,
   type CreateCompletionReq,
   type OkRes,
-  type PlanItem,
+  type Task,
+  type TaskId,
 } from '../shared/api-schemas';
-import { nowISO, todayCR, weekStart, type ISODate } from '../shared/dates';
+import { nowISO, todayCR, type ISODate } from '../shared/dates';
 import {
   buildOptimisticCompletion,
   completionMatchesRange,
-  findPlannedItemForTask,
   insertCompletion,
-  markPlanItemDone,
   newestForTask,
   removeCompletion,
   removeFromLatest,
-  revertPlanItemsForCompletion,
   upsertLatest,
 } from './cache';
 import type { ApiClient } from './client';
-import { useApiClient, useCatalog } from './context';
+import { useApiClient } from './context';
 import { mutationKeys, queryKeys, type CompletionsListKey, type CompletionsRange } from './keys';
+import { useTasks } from './tasks';
 import {
   cachedUserName,
   handleAuthError,
@@ -57,7 +55,7 @@ import {
   type OptimisticContext,
 } from './mutation-utils';
 
-const AFFECTED = [queryKeys.completions.all, queryKeys.plan.all] as const;
+const AFFECTED = [queryKeys.completions.all] as const;
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -84,17 +82,17 @@ export function useCompletions(query: CompletionsQuery = {}, options: { enabled?
   });
 }
 
-/** `GET /api/completions/latest`: the latest sign-off per catalog task, no date limit. */
+/** `GET /api/completions/latest`: newest full + newest partial sign-off per task, no date limit. */
 export function useLatestCompletions() {
   return useQuery(latestOptions(useApiClient()));
 }
 
 export interface TaskStatuses {
-  /** Status per catalog task. */
+  /** Status per task. */
   byId: ReadonlyMap<TaskId, TaskStatus>;
-  /** All catalog task statuses, most urgent first (overdue/never, due-soon, ok, dormant). */
+  /** All task statuses, most urgent first (overdue/never, due-soon, ok, done). */
   list: readonly TaskStatus[];
-  /** Active tasks not overdue/never, as a whole-number percentage (100 when none are active). */
+  /** Open tasks not overdue/never, as a whole-number percentage (100 when none are open). */
   percentOnTrack: number;
 }
 
@@ -102,26 +100,47 @@ export function buildTaskStatuses(
   tasks: readonly Task[],
   completions: readonly Completion[],
   today: ISODate,
-  house: Pick<House, 'rainyMonths'>,
 ): TaskStatuses {
-  const byId = taskStatuses(tasks, completions, today, house);
+  const byId = taskStatuses(tasks, completions, today);
   const list = [...byId.values()].sort(compareByUrgency);
   return { byId, list, percentOnTrack: percentOnTrack(list) };
 }
 
 /**
- * Status of every catalog task as of `date` (default: today in Costa Rica), derived from the
- * latest completions + domain scheduling rules. Same cache entry as `useLatestCompletions`, so a
- * sign-off updates it optimistically.
+ * Status of every active task as of `date` (default: today in Costa Rica), derived from the task
+ * list and the latest completions + domain scheduling rules. Shares the latest cache entry with
+ * `useLatestCompletions`, so a sign-off updates it optimistically.
+ *
+ * `data` exists only once BOTH lists have loaded and `isError` is true when either failed, so
+ * callers can never show a percentage computed from a missing task list.
  */
 export function useTaskStatuses(date?: ISODate) {
-  const { tasks, house } = useCatalog();
+  const tasks = useTasks();
+  const latest = useQuery(latestOptions(useApiClient()));
   const today = date ?? todayCR();
-  const select = useCallback(
-    (completions: Completion[]) => buildTaskStatuses(tasks, completions, today, house),
-    [tasks, house, today],
+  const tasksData = tasks.data;
+  const latestData = latest.data;
+  const data = useMemo(
+    () =>
+      tasksData !== undefined && latestData !== undefined
+        ? buildTaskStatuses(tasksData, latestData, today)
+        : undefined,
+    [tasksData, latestData, today],
   );
-  return useQuery({ ...latestOptions(useApiClient()), select });
+  const { refetch: refetchTasks } = tasks;
+  const { refetch: refetchLatest } = latest;
+  const refetch = useCallback(
+    () => Promise.all([refetchTasks(), refetchLatest()]),
+    [refetchTasks, refetchLatest],
+  );
+  const isError = tasks.isError || latest.isError;
+  return {
+    data,
+    isPending: data === undefined && !isError,
+    isError,
+    error: tasks.error ?? latest.error,
+    refetch,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -150,12 +169,7 @@ function applyOptimisticSignOff(qc: QueryClient, req: CreateCompletionReq): void
   const input = parsed.data;
   const now = nowISO();
 
-  let planItemId = input.planItemId ?? null;
-  if (planItemId === null && input.taskId !== undefined) {
-    const week = qc.getQueryData<PlanItem[]>(queryKeys.plan.week(weekStart(input.doneOn)));
-    planItemId = (week && findPlannedItemForTask(week, input.taskId)?.id) ?? null;
-  }
-  const completion = buildOptimisticCompletion(input, cachedUserName(qc), planItemId, now);
+  const completion = buildOptimisticCompletion(input, cachedUserName(qc), now);
 
   for (const [key, list] of qc.getQueriesData<Completion[]>({
     queryKey: queryKeys.completions.lists(),
@@ -173,13 +187,6 @@ function applyOptimisticSignOff(qc: QueryClient, req: CreateCompletionReq): void
       qc.setQueryData<Completion[]>(queryKeys.completions.latest(), result.list);
       if (result.replaced) displacedFor(qc).set(completion.id, result.replaced);
     }
-  }
-
-  if (planItemId !== null) {
-    const linked = planItemId;
-    qc.setQueriesData<PlanItem[]>({ queryKey: queryKeys.plan.all }, (items) =>
-      items ? markPlanItemDone(items, linked, completion, now) : items,
-    );
   }
 }
 
@@ -216,14 +223,14 @@ export function useSignOff(): IdMutationResult<Completion, CreateCompletionReq, 
 // ---------------------------------------------------------------------------
 
 function applyOptimisticUndo(qc: QueryClient, id: string): void {
-  const now = nowISO();
   const lists = qc.getQueriesData<Completion[]>({ queryKey: queryKeys.completions.lists() });
 
   const latest = qc.getQueryData<Completion[]>(queryKeys.completions.latest());
   const removed = latest?.find((c) => c.id === id);
   if (latest && removed?.taskId) {
     const cachedLists = lists.flatMap(([, list]) => (list ? [list] : []));
-    const fallback = displacedFor(qc).get(id) ?? newestForTask(cachedLists, removed.taskId, id);
+    const fallback =
+      displacedFor(qc).get(id) ?? newestForTask(cachedLists, removed.taskId, id, removed.partial);
     qc.setQueryData<Completion[]>(
       queryKeys.completions.latest(),
       removeFromLatest(latest, id, fallback),
@@ -233,9 +240,6 @@ function applyOptimisticUndo(qc: QueryClient, id: string): void {
   for (const [key, list] of lists) {
     if (list) qc.setQueryData<Completion[]>(key, removeCompletion(list, id));
   }
-  qc.setQueriesData<PlanItem[]>({ queryKey: queryKeys.plan.all }, (items) =>
-    items ? revertPlanItemsForCompletion(items, id, now) : items,
-  );
 }
 
 /**
@@ -261,7 +265,7 @@ export function signOffSettled(qc: QueryClient, id: string): Promise<boolean> {
 
 /**
  * `DELETE /api/completions/:id` (soft delete). Optimistically removes the sign-off, restores the
- * task's previous latest sign-off and reverts a linked plan item to `planned`. If that sign-off's
+ * task's previous latest sign-off of the same kind. If that sign-off's
  * own POST is still in flight, the DELETE waits for it (and is skipped if the POST fails).
  */
 export function useUndoSignOff() {

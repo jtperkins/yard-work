@@ -8,3 +8,4 @@ export * from './session';
 export * from './validate';
 export * from './repo';
 export * from './auth';
+export * from './slug';

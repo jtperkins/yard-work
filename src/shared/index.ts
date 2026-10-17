@@ -1,3 +1,3 @@
-export * from './catalog-schema';
+export * from './lang';
 export * from './api-schemas';
 export * from './dates';

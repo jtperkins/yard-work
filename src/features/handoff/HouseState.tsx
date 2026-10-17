@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { useCatalog, useCompletions, useTaskStatuses } from '../../api';
+import { useCompletions, useTasks, useTaskStatuses } from '../../api';
+import { isDailyTask } from '../../domain/schedule';
 import { paths } from '../../app/paths';
 import { useLang, useT } from '../../i18n';
 import { addDays, type ISODate } from '../../shared/dates';
@@ -16,10 +17,10 @@ import {
   TextLink,
   type SummaryItem,
 } from '../../ui';
-import { isDailyTask } from '../calendar/model';
 import { describeWork } from '../log/describe';
 import { relativeDay } from '../log/format';
 import { LoadError } from '../log/LoadError';
+import { taskMap } from '../log/taskMap';
 
 /** Items listed per column before "+n more". */
 const VISIBLE = 6;
@@ -65,14 +66,15 @@ export function HouseState({ today }: { today: ISODate }) {
   const t = useT('handoff');
   const tc = useT('common');
   const { lang } = useLang();
-  const catalog = useCatalog();
+  // Active tasks drive the schedule, every task (archived too) names the sign-off history.
+  const activeTasks = useTasks();
+  const allTasks = useTasks({ archived: true });
   const statuses = useTaskStatuses(today);
   const recent = useCompletions({ from: addDays(today, -(RECENT_DAYS - 1)), to: today });
 
   const taskTitle = (taskId: string) => {
-    const work = describeWork({ taskId, title: null }, catalog, lang);
+    const work = describeWork({ taskId, title: null }, historyTasks, lang);
     return {
-      color: work.color,
       content: work.task ? (
         <TextLink as={Link} to={paths.task(taskId)}>
           {work.title}
@@ -83,17 +85,21 @@ export function HouseState({ today }: { today: ISODate }) {
     };
   };
 
+  const historyTasks = taskMap(allTasks.data);
+  const activeById = taskMap(activeTasks.data);
+
   let body: ReactNode;
-  if (statuses.isError || recent.isError) {
+  if (statuses.isError || recent.isError || allTasks.isError) {
     body = (
       <LoadError
         onRetry={() => {
           void statuses.refetch();
           void recent.refetch();
+          void allTasks.refetch();
         }}
       />
     );
-  } else if (!statuses.data || !recent.data) {
+  } else if (!statuses.data || !recent.data || !allTasks.data) {
     body = (
       <Grid mdCols={3} gap="lg" aria-busy="true">
         <SkeletonText lines={4} />
@@ -117,7 +123,7 @@ export function HouseState({ today }: { today: ISODate }) {
       .filter((s) => {
         if (s.state !== 'due-soon' && s.state !== 'ok') return false;
         if (!s.nextDue || s.nextDue > horizon) return false;
-        const task = catalog.taskById.get(s.taskId);
+        const task = activeById.get(s.taskId);
         return task !== undefined && !isDailyTask(task);
       })
       .sort((a, b) => (a.nextDue ?? '').localeCompare(b.nextDue ?? ''))
@@ -129,10 +135,9 @@ export function HouseState({ today }: { today: ISODate }) {
     const signedOff: SummaryItem[] = [...recent.data]
       .sort((a, b) => b.doneOn.localeCompare(a.doneOn) || b.createdAt.localeCompare(a.createdAt))
       .map((c) => {
-        const work = describeWork(c, catalog, lang);
+        const work = describeWork(c, historyTasks, lang);
         return {
           key: c.id,
-          color: work.color,
           content: (
             <>
               {work.task ? (
@@ -147,7 +152,7 @@ export function HouseState({ today }: { today: ISODate }) {
               </Text>
             </>
           ),
-          aside: relativeDay(c.doneOn, today, tc),
+          aside: `${relativeDay(c.doneOn, today, tc)}${c.partial ? ` · ${tc('status.partial')}` : ''}`,
         };
       });
 

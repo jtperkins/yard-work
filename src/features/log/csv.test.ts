@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { makeCompletion } from '../../api/test-utils';
-import { getCatalog } from '../../domain/catalog';
+import { makeTask } from '../../domain/test-fixtures';
 import { buildLogCsv, escapeCsvField, logCsvFilename, toCsv, type LogCsvHeaders } from './csv';
 
 const headers: LogCsvHeaders = {
   date: 'Date',
   task: 'Task',
-  category: 'Category',
+  partial: 'Partial',
   doneBy: 'Done by',
   signedBy: 'Signed by',
   note: 'Note',
@@ -58,12 +58,18 @@ describe('toCsv', () => {
 });
 
 describe('buildLogCsv', () => {
-  const catalog = getCatalog();
+  const chapia = makeTask({ id: 'chapia', title: 'Chapia', titleEs: 'Chapia (zacate)' });
+  const archived = makeTask({
+    id: 'old-job',
+    title: 'Paint the old shed',
+    archivedAt: '2026-10-01T00:00:00Z',
+  });
+  const taskById = new Map([chapia, archived].map((t) => [t.id, t]));
 
   it('writes a header and one row per sign-off in the given language', () => {
     const rows = [
       makeCompletion({
-        taskId: 'mow-lawn',
+        taskId: 'chapia',
         doneOn: '2026-10-05',
         doneBy: 'Jardinero',
         loggedBy: 'JT',
@@ -80,32 +86,43 @@ describe('buildLogCsv', () => {
         createdAt: '2026-10-04T15:00:00.000Z',
       }),
     ];
-    const csv = buildLogCsv(rows, { catalog, lang: 'es', headers, adHocLabel: 'Extra' });
+    const csv = buildLogCsv(rows, { taskById, lang: 'es', headers, partialLabel: 'Partial' });
     const lines = csv.split('\r\n');
     expect(lines).toHaveLength(3);
-    expect(lines[0]).toBe('Date,Task,Category,Done by,Signed by,Note,Task ID,Logged at (UTC)');
-    const mow = catalog.taskById.get('mow-lawn')!;
+    expect(lines[0]).toBe('Date,Task,Partial,Done by,Signed by,Note,Task ID,Logged at (UTC)');
     expect(lines[1]).toBe(
       [
         '2026-10-05',
-        escapeCsvField(mow.name.es),
-        escapeCsvField(catalog.house.categories[mow.category].es),
+        escapeCsvField('Chapia (zacate)'),
+        '',
         'Jardinero',
         'JT',
         '"Front, ""back"" and sides, done"',
-        'mow-lawn',
+        'chapia',
         '2026-10-05T20:00:00.000Z',
       ].join(','),
     );
-    expect(lines[2]).toBe('2026-10-04,Fix the gate latch,Extra,JT,JT,,,2026-10-04T15:00:00.000Z');
+    expect(lines[2]).toBe('2026-10-04,Fix the gate latch,,JT,JT,,,2026-10-04T15:00:00.000Z');
   });
 
-  it('keeps a task id that left the catalog', () => {
-    const csv = buildLogCsv([makeCompletion({ taskId: 'retired-task', note: null })], {
-      catalog,
+  it('keeps the title of an archived task and flags partial rows', () => {
+    const csv = buildLogCsv([makeCompletion({ taskId: 'old-job', partial: true, note: 'half' })], {
+      taskById,
       lang: 'en',
       headers,
-      adHocLabel: 'Ad-hoc',
+      partialLabel: 'Partial',
+    });
+    const row = csv.split('\r\n')[1]!;
+    expect(row).toContain(',Paint the old shed,Partial,');
+    expect(row).toContain(',old-job,');
+  });
+
+  it('keeps a task id that no longer exists at all', () => {
+    const csv = buildLogCsv([makeCompletion({ taskId: 'retired-task', note: null })], {
+      taskById,
+      lang: 'en',
+      headers,
+      partialLabel: 'Partial',
     });
     expect(csv.split('\r\n')[1]).toContain(',retired-task,,');
   });

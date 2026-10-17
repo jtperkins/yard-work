@@ -1,5 +1,5 @@
 import type { TFunction } from '../../i18n';
-import type { Lang } from '../../shared/catalog-schema';
+import type { Lang } from '../../shared/lang';
 import { diffDays, localeFor, type ISODate } from '../../shared/dates';
 
 /** "Today", "Yesterday", "in 3 days", "5 days ago" — `date` relative to `today`. */

@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { CATEGORIES } from '../shared/catalog-schema';
-import { byPersonWeekly, dailyCounts, onTimeRateByCategory } from './stats';
-import { DAILY, HOUSE, MOW, WATER, done, makeTask } from './test-fixtures';
+import { byPersonWeekly, dailyCounts } from './stats';
+import { done } from './test-fixtures';
 
 describe('dailyCounts', () => {
   it('zero-fills every day in the inclusive range and counts ad-hoc rows too', () => {
     const rows = [
-      done('mow-lawn', '2026-10-02'),
+      done('chapia', '2026-10-02'),
       done(null, '2026-10-02'),
-      done('daily-cat-care', '2026-10-04'),
-      done('mow-lawn', '2026-09-30'), // out of range
-      done('mow-lawn', '2026-10-05'), // out of range
+      done('sweep-patio', '2026-10-04'),
+      done('chapia', '2026-09-30'), // out of range
+      done('chapia', '2026-10-05'), // out of range
     ];
     expect(dailyCounts(rows, '2026-10-01', '2026-10-04')).toEqual([
       { date: '2026-10-01', count: 0 },
@@ -26,60 +25,20 @@ describe('dailyCounts', () => {
   });
 });
 
-describe('onTimeRateByCategory', () => {
-  it('measures each repeat sign-off against cadence + 20% grace (season at previous)', () => {
-    const rows = [
-      // rainy: 7 days, grace 1 → on time up to 8 days
-      done('mow-lawn', '2026-10-01'),
-      done('mow-lawn', '2026-10-09'), // gap 8 → on time
-      done('mow-lawn', '2026-10-18'), // gap 9 → late
-      // dry: 14 days, grace 2 → on time up to 16 days, even though May is rainy
-      done('mow-lawn', '2026-04-20'),
-      done('mow-lawn', '2026-05-06'), // gap 16 → on time
-    ];
-    const lawn = onTimeRateByCategory([MOW], rows, HOUSE).find((r) => r.category === 'lawn');
-    // sorted: 04-20, 05-06 (on time), 10-01 (late: long gap), 10-09 (on time), 10-18 (late)
-    expect(lawn).toEqual({ category: 'lawn', onTime: 2, total: 4, rate: 0.5 });
+describe('partial sign-offs', () => {
+  it('are not counted by dailyCounts or byPersonWeekly', () => {
+    const rows = [done('a', '2026-10-07', 'JT'), done('a', '2026-10-07', 'JT', true)];
+    expect(dailyCounts(rows, '2026-10-07', '2026-10-07')).toEqual([
+      { date: '2026-10-07', count: 1 },
+    ]);
+    const weekly = byPersonWeekly(rows, 1, '2026-10-07');
+    expect(weekly.people).toEqual(['JT']);
+    expect(weekly.weeks[0]?.counts).toEqual({ JT: 1 });
+    expect(weekly.weeks[0]?.total).toBe(1);
   });
 
-  it('daily tasks have no grace; same-day duplicates count once', () => {
-    const rows = [
-      done('daily-cat-care', '2026-10-01'),
-      done('daily-cat-care', '2026-10-01', 'Other'),
-      done('daily-cat-care', '2026-10-02'),
-      done('daily-cat-care', '2026-10-04'),
-    ];
-    const cats = onTimeRateByCategory([DAILY], rows, HOUSE).find((r) => r.category === 'cats');
-    expect(cats).toEqual({ category: 'cats', onTime: 1, total: 2, rate: 0.5 });
-  });
-
-  it('does not penalise dormant gaps', () => {
-    const garden = (rows: ReturnType<typeof done>[]) =>
-      onTimeRateByCategory([WATER], rows, HOUSE).find((r) => r.category === 'garden');
-    // last watering of the dry season, then first day of the next one
-    expect(
-      garden([done('water-garden', '2026-04-29'), done('water-garden', '2026-12-01')]),
-    ).toMatchObject({ onTime: 1, total: 1 });
-    expect(
-      garden([done('water-garden', '2026-04-29'), done('water-garden', '2026-12-02')]),
-    ).toMatchObject({ onTime: 0, total: 1 });
-    // doing a dormant task is never late
-    expect(
-      garden([done('water-garden', '2026-04-29'), done('water-garden', '2026-07-01')]),
-    ).toMatchObject({ onTime: 1, total: 1 });
-  });
-
-  it('covers every category in order; null rate when nothing measured; ignores ad-hoc/unknown', () => {
-    const tasks = [MOW, makeTask({ id: 'gutters', category: 'drainage', frequencyDays: 60 })];
-    const rows = [
-      done(null, '2026-10-01'),
-      done('ghost', '2026-10-01'),
-      done('ghost', '2026-10-02'),
-      done('gutters', '2026-01-01'),
-    ];
-    const result = onTimeRateByCategory(tasks, rows, HOUSE);
-    expect(result.map((r) => r.category)).toEqual([...CATEGORIES]);
-    expect(result.every((r) => r.total === 0 && r.rate === null && r.onTime === 0)).toBe(true);
+  it('count a row with no partial field as full', () => {
+    expect(dailyCounts([{ doneOn: '2026-10-07' }], '2026-10-07', '2026-10-07')[0]?.count).toBe(1);
   });
 });
 

@@ -63,22 +63,22 @@ const handoff = {
   'how.description': 'A two-minute tour for whoever’s looking after the place next.',
   'how.signOff.title': 'Sign off work',
   'how.signOff.body':
-    'On the Board, the Week or a task’s page, tap “Sign off”. Choose who did it (it can be the yard worker), the date (backdating is fine) and add a note if useful. An Undo button shows for a few seconds.',
-  'how.plan.title': 'Plan the week',
+    'On the Board or a task’s page, tap “Sign off”. Choose who did it (it can be the yard worker), the date (backdating is fine) and add a note if useful. An Undo button shows for a few seconds.',
+  'how.incidents.title': 'Report incidents',
   'how.plan.body':
-    'On Week, add the suggested tasks or your own, assign them and check the supplies list. Share it on WhatsApp (in Spanish by default) or print it as a clipboard sheet.',
-  'how.track.title': 'Check the calendar and the log',
+    'Saw someone poking around? Open Incidents and tap “Report incident”. Say what happened and who was involved, and attach photos, videos or files. Only signed-in people can see incident reports.',
+  'how.track.title': 'Check the log',
   'how.track.body':
-    'The Calendar shows what got done, what’s planned for yard day and what’s coming due. The Log is the full clipboard, with filters and a CSV export.',
+    'The Log is the full clipboard of sign-offs, with filters and a CSV export. A “Partial” badge marks work that was started but not finished.',
   'how.notes.title': 'Leave handoff notes',
   'how.notes.body':
     'Pin the essentials (cats, emergency contacts, utilities, yard worker, house quirks) and add notes as things happen. Only signed-in people can see them.',
   'how.catalog.title': 'Change the task list',
   'how.catalog.body':
-    'Tasks, how often they repeat and their supplies live in the data/ folder of the code (tasks.json, supplies.json, house.json). Edit, commit and the site redeploys. Tasks marked “Draft” still need confirming.',
+    'Tasks are added and edited in the app (Tasks → New task). Changes show immediately.',
   'how.access.title': 'Viewing and signing in',
   'how.access.body':
-    'Anyone with the link can look around. Signing off, planning and these notes need your name and the shared house code. Ask the organizer for it.',
+    'Anyone with the link can look around. Signing off, editing tasks, incidents and these notes need your name and the shared house code. Ask the organizer for it.',
 
   loadError: 'Couldn’t load the notes.',
 };

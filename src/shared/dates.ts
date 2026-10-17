@@ -11,7 +11,7 @@
  *    (matches `house.yardDay`).
  *  - Timestamps (created_at etc.) are ISO-8601 UTC strings (`nowISO()`).
  */
-import type { Lang } from './catalog-schema';
+import type { Lang } from './lang';
 
 export const CR_TIMEZONE = 'America/Costa_Rica';
 
@@ -135,6 +135,15 @@ export function isFuture(iso: ISODate, now: Date = new Date()): boolean {
 
 export function addDays(iso: ISODate, days: number): ISODate {
   return fromUTCms(toUTCms(iso) + days * MS_PER_DAY);
+}
+
+/** Adds calendar months, clamping to the end of the month: 2026-08-31 + 6 → 2027-02-28. */
+export function addMonthsISO(iso: ISODate, months: number): ISODate {
+  const { year, month, day } = parseISODate(iso);
+  const index = year * 12 + (month - 1) + months;
+  const y = Math.floor(index / 12);
+  const m = (index % 12) + 1;
+  return isoFromParts(y, m, Math.min(day, daysInMonth(y, m)));
 }
 
 /** Whole days from `from` to `to` (positive when `to` is later): diffDays('2026-01-01','2026-01-03') === 2. */

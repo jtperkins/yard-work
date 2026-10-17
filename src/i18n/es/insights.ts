@@ -10,10 +10,6 @@ const insights: typeof en = {
   'stats.last30Hint': '{count} en los 30 anteriores',
   'stats.activeDays': 'Días con trabajo',
   'stats.activeDaysHint': 'En los últimos 12 meses',
-  'stats.onTime': 'Hecho a tiempo',
-  'stats.onTimeHint_one': 'De {count} firma repetida',
-  'stats.onTimeHint_other': 'De {count} firmas repetidas',
-  'stats.onTimeNone': 'Todavía faltan repeticiones',
   'stats.onTrack': 'Tareas al día',
   'stats.onTrackHint': 'Sin atraso en este momento',
 
@@ -26,12 +22,6 @@ const insights: typeof en = {
   'heatmap.more': 'Más',
   'heatmap.dateColumn': 'Fecha',
   'heatmap.countColumn': 'Firmas',
-
-  'onTime.title': 'Puntualidad por categoría',
-  'onTime.description':
-    'Porcentaje de firmas repetidas hechas a tiempo, con un margen del 20% sobre la frecuencia.',
-  'onTime.detail': '{onTime} de {total} a tiempo',
-  'onTime.none': 'Sin repeticiones aún',
 
   'byPerson.title': 'Quién hace el trabajo',
   'byPerson.description':

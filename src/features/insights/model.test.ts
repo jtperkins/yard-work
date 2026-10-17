@@ -43,3 +43,15 @@ describe('recent counts', () => {
     expect(countBetween(rows, '2026-08-01', '2026-08-01')).toBe(1);
   });
 });
+
+describe('partial sign-offs', () => {
+  it('are not counted, and a row with no partial field is', () => {
+    const rows = [
+      { doneOn: '2026-10-07', partial: false },
+      { doneOn: '2026-10-07', partial: true },
+      { doneOn: '2026-10-07' },
+    ];
+    expect(countBetween(rows, '2026-10-07', '2026-10-07')).toBe(2);
+    expect(recentCounts(rows.slice(0, 2), '2026-10-07', 30).current).toBe(1);
+  });
+});

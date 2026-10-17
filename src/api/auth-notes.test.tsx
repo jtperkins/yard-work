@@ -1,10 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
-import { getCatalog, loadCatalog } from '../domain/catalog';
 import type { Me, Note } from '../shared/api-schemas';
 import { useLogin, useLogout, useSession } from './auth';
-import { CatalogProvider, useApiClient, useCatalog, defaultApiClient } from './context';
+import { useApiClient, defaultApiClient } from './context';
 import { queryKeys } from './keys';
 import { useAddNote, useDeleteNote, useNotes } from './notes';
 import { deferred, jsonResponse, makeNote, setupApi } from './test-utils';
@@ -134,27 +132,7 @@ describe('note mutations', () => {
   });
 });
 
-describe('catalog & client context', () => {
-  it('useCatalog defaults to the bundled catalog', () => {
-    const { result } = renderHook(() => useCatalog());
-    expect(result.current).toBe(getCatalog());
-    expect(result.current.taskById.get('mow-lawn')?.id).toBe('mow-lawn');
-  });
-
-  it('CatalogProvider injects a catalog', () => {
-    const bundled = getCatalog();
-    const custom = loadCatalog({
-      tasks: bundled.tasks.slice(0, 1),
-      supplies: bundled.supplies,
-      house: bundled.house,
-    });
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <CatalogProvider catalog={custom}>{children}</CatalogProvider>
-    );
-    const { result } = renderHook(() => useCatalog(), { wrapper });
-    expect(result.current.tasks).toHaveLength(1);
-  });
-
+describe('client context', () => {
   it('useApiClient defaults to the same-origin client', () => {
     const { result } = renderHook(() => useApiClient());
     expect(result.current).toBe(defaultApiClient);

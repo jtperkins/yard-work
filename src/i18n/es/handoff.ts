@@ -66,22 +66,22 @@ const handoff: typeof en = {
   'how.description': 'Un recorrido de dos minutos para quien cuide la casa después.',
   'how.signOff.title': 'Firmar el trabajo',
   'how.signOff.body':
-    'En el Tablero, la Semana o la página de una tarea, toque “Firmar”. Indique quién lo hizo (puede ser el jardinero), la fecha (se vale poner una fecha anterior) y una nota si sirve. Por unos segundos aparece el botón Deshacer.',
-  'how.plan.title': 'Planear la semana',
+    'En el Tablero o la página de una tarea, toque “Firmar”. Indique quién lo hizo (puede ser el jardinero), la fecha (se vale poner una fecha anterior) y una nota si sirve. Por unos segundos aparece el botón Deshacer.',
+  'how.incidents.title': 'Reportar incidentes',
   'how.plan.body':
-    'En Semana, agregue las tareas sugeridas o las suyas, asígnelas y revise la lista de materiales. Compártala por WhatsApp (en español de una vez) o imprímala como hoja de trabajo.',
-  'how.track.title': 'Revisar el calendario y la bitácora',
+    '¿Vio a alguien husmeando? Abra Incidentes y toque “Reportar incidente”. Cuente qué pasó y quién estaba, y adjunte fotos, videos o archivos. Solo quienes ingresan pueden ver los reportes.',
+  'how.track.title': 'Revisar la bitácora',
   'how.track.body':
-    'El Calendario muestra lo que se hizo, lo planeado para el día del jardinero y lo que está por tocar. La Bitácora es la tablilla completa, con filtros y exportación a CSV.',
+    'La Bitácora es la tablilla completa de firmas, con filtros y exportación a CSV. La etiqueta “Parcial” marca el trabajo que se empezó pero no se terminó.',
   'how.notes.title': 'Dejar notas de entrega',
   'how.notes.body':
     'Fije lo esencial (gatos, contactos de emergencia, servicios, jardinero, mañas de la casa) y agregue notas conforme pasan las cosas. Solo quienes ingresan pueden verlas.',
   'how.catalog.title': 'Cambiar la lista de tareas',
   'how.catalog.body':
-    'Las tareas, cada cuánto se repiten y sus materiales están en la carpeta data/ del código (tasks.json, supplies.json, house.json). Se editan, se hace commit y el sitio se vuelve a publicar. Las tareas marcadas como “Borrador” todavía hay que confirmarlas.',
+    'Las tareas se agregan y se editan en la app (Tareas → Nueva tarea). Los cambios se ven de inmediato.',
   'how.access.title': 'Ver e ingresar',
   'how.access.body':
-    'Cualquiera con el enlace puede ver. Para firmar, planear y leer estas notas se necesita su nombre y el código de la casa. Pídaselo a quien organiza.',
+    'Cualquiera con el enlace puede ver. Para firmar, editar tareas, reportar incidentes y leer estas notas se necesita su nombre y el código de la casa. Pídaselo a quien organiza.',
 
   loadError: 'No se pudieron cargar las notas.',
 };

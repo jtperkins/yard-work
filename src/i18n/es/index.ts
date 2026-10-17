@@ -1,9 +1,8 @@
 import type { Dictionaries } from '../types';
 import common from './common';
 import board from './board';
-import week from './week';
-import calendar from './calendar';
 import tasks from './tasks';
+import incidents from './incidents';
 import log from './log';
 import insights from './insights';
 import handoff from './handoff';
@@ -14,9 +13,8 @@ import ui from './ui';
 export const es: Dictionaries = {
   common,
   board,
-  week,
-  calendar,
   tasks,
+  incidents,
   log,
   insights,
   handoff,

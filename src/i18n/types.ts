@@ -1,5 +1,5 @@
 import type { en } from './en';
-export type { Lang } from '../shared/catalog-schema';
+export type { Lang } from '../shared/lang';
 
 /** Shape of all dictionaries (English is the source of truth). */
 export type Dictionaries = typeof en;

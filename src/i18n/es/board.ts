@@ -9,7 +9,6 @@ const board: typeof en = {
   'summary.allClear': 'Todo está al día. ¡Buen trabajo!',
   'summary.attention_one': 'Hay {count} trabajo pendiente hoy.',
   'summary.attention_other': 'Hay {count} trabajos pendientes hoy.',
-  planWeek: 'Planear la semana',
 
   'stats.label': 'De un vistazo',
   'stats.overdue': 'Atrasadas',
@@ -19,7 +18,7 @@ const board: typeof en = {
   'stats.doneThisWeek': 'Hechas esta semana',
   'stats.doneThisWeekHint': 'desde el lunes',
   'stats.onTrack': 'Al día',
-  'stats.onTrackHint': 'de las tareas en temporada',
+  'stats.onTrackHint': 'de las tareas abiertas',
 
   'today.title': 'Hoy',
   'today.description': 'Los trabajos de todos los días. Fírmelos conforme los haga.',
@@ -36,7 +35,6 @@ const board: typeof en = {
 
   'upcoming.title': 'Más adelante esta semana',
   'upcoming.list': 'Trabajos que tocan más adelante esta semana',
-  'upcoming.openWeek': 'Abrir el plan de la semana',
 
   'readOnly.title': 'Está viendo en modo de solo lectura',
   'readOnly.body': 'Ingrese con el código de la casa para firmar trabajos.',

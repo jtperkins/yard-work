@@ -22,16 +22,17 @@ import * as logout from '../../functions/api/logout';
 import * as me from '../../functions/api/me';
 import * as noteById from '../../functions/api/notes/[id]';
 import * as notes from '../../functions/api/notes/index';
-import * as planById from '../../functions/api/plan/[id]';
-import * as plan from '../../functions/api/plan/index';
+import * as incidentFiles from '../../functions/api/incidents/[id]/files';
+import * as incidentById from '../../functions/api/incidents/[id]';
+import * as incidentFile from '../../functions/api/incidents/files/[fileId]';
+import * as incidents from '../../functions/api/incidents/index';
+import * as taskById from '../../functions/api/tasks/[id]';
+import * as tasks from '../../functions/api/tasks/index';
 import { SESSION_COOKIE } from '../../src/shared/api-schemas';
 import { type AppContext, type AppData, type Env, signSession } from '../lib';
 
 export const TEST_HOUSE_CODE = 'tortuga-verde-42';
 export const TEST_SESSION_SECRET = 'test-session-secret-0123456789abcdef';
-
-/** Catalog ids from the Phase 1 stub — the only ones guaranteed to stay. */
-export const STUB_TASK_IDS = ['rust-inspection', 'mow-lawn', 'daily-cat-care'] as const;
 
 const MIGRATIONS_DIR = join(process.cwd(), 'migrations');
 
@@ -57,7 +58,46 @@ export async function applyMigrations(db: D1Database): Promise<void> {
 }
 
 export async function resetDb(db: D1Database): Promise<void> {
-  await db.batch(['completions', 'plan_items', 'notes'].map((t) => db.prepare(`DELETE FROM ${t}`)));
+  await db.batch(
+    ['completions', 'plan_items', 'notes', 'incident_files', 'incidents', 'tasks'].map((t) =>
+      db.prepare(`DELETE FROM ${t}`),
+    ),
+  );
+}
+
+export interface SeedTask {
+  id: string;
+  title?: string;
+  kind?: 'once' | 'recurring';
+  intervalCount?: number | null;
+  intervalUnit?: 'day' | 'week' | 'month' | null;
+  dueOn?: string | null;
+  archived?: boolean;
+}
+
+/** Inserts a task row directly (defaults: recurring every 14 days). */
+export async function seedTask(db: D1Database, t: SeedTask): Promise<void> {
+  const kind = t.kind ?? 'recurring';
+  const recurring = kind === 'recurring';
+  await db
+    .prepare(
+      `INSERT INTO tasks
+         (id, title, steps, kind, interval_count, interval_unit, due_on, priority,
+          archived_at, created_by, created_at, updated_at)
+       VALUES (?, ?, 'Do it', ?, ?, ?, ?, 'normal', ?, 'test', ?, ?)`,
+    )
+    .bind(
+      t.id,
+      t.title ?? t.id,
+      kind,
+      recurring ? (t.intervalCount ?? 14) : null,
+      recurring ? (t.intervalUnit ?? 'day') : null,
+      t.dueOn ?? null,
+      t.archived ? '2026-10-01T00:00:00Z' : null,
+      '2026-10-01T00:00:00Z',
+      '2026-10-01T00:00:00Z',
+    )
+    .run();
 }
 
 export interface Harness {
@@ -68,9 +108,13 @@ export interface Harness {
 
 /** Starts Miniflare with an in-memory D1 and applies the migrations. */
 export async function createHarness(): Promise<Harness> {
-  const proxy = await getPlatformProxy<{ DB: D1Database }>({ persist: false, envFiles: [] });
+  const proxy = await getPlatformProxy<{ DB: D1Database; INCIDENT_FILES: R2Bucket }>({
+    persist: false,
+    envFiles: [],
+  });
   const env: Env = {
     DB: proxy.env.DB,
+    INCIDENT_FILES: proxy.env.INCIDENT_FILES,
     HOUSE_CODE: TEST_HOUSE_CODE,
     SESSION_SECRET: TEST_SESSION_SECRET,
   };
@@ -121,8 +165,12 @@ const ROUTES: ReadonlyArray<readonly [pattern: string, mod: Record<string, unkno
   ['/api/completions', completions],
   ['/api/completions/latest', completionsLatest],
   ['/api/completions/:id', completionById],
-  ['/api/plan', plan],
-  ['/api/plan/:id', planById],
+  ['/api/tasks', tasks],
+  ['/api/tasks/:id', taskById],
+  ['/api/incidents', incidents],
+  ['/api/incidents/files/:fileId', incidentFile],
+  ['/api/incidents/:id/files', incidentFiles],
+  ['/api/incidents/:id', incidentById],
   ['/api/notes', notes],
   ['/api/notes/:id', noteById],
 ];
@@ -159,7 +207,9 @@ export interface ApiOptions {
   method?: string;
   /** JSON-encoded with `Content-Type: application/json` unless `rawBody` is given */
   body?: unknown;
-  rawBody?: string;
+  rawBody?: string | Uint8Array | ArrayBuffer;
+  /** return the response body as an ArrayBuffer instead of parsing JSON */
+  raw?: boolean;
   headers?: Record<string, string>;
   /** sign in as this name (valid cookie) */
   as?: string;
@@ -182,7 +232,7 @@ export async function api<T = unknown>(
 ): Promise<ApiResult<T>> {
   const method = (opts.method ?? 'GET').toUpperCase();
   const headers = new Headers(opts.headers);
-  let body: string | undefined = opts.rawBody;
+  let body: string | Uint8Array | ArrayBuffer | undefined = opts.rawBody;
   if (opts.body !== undefined) {
     body = JSON.stringify(opts.body);
     if (!headers.has('content-type')) headers.set('content-type', 'application/json');
@@ -194,12 +244,15 @@ export async function api<T = unknown>(
   const request = new Request(`${opts.origin ?? 'http://localhost:8788'}${path}`, {
     method,
     headers,
-    body,
+    body: body as BodyInit | undefined,
   });
   const { handler, params } = resolve(method, new URL(request.url).pathname);
   const ctx = makeContext({ request, env: h.env, params });
   ctx.next = () => Promise.resolve(handler(ctx));
   const res = await middleware(ctx);
+  if (opts.raw) {
+    return { status: res.status, headers: res.headers, body: (await res.arrayBuffer()) as T };
+  }
   const text = await res.text();
   return {
     status: res.status,

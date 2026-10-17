@@ -2,7 +2,17 @@
  * SQL access for D1. Maps snake_case rows to the camelCase DTOs in src/shared/api-schemas.ts.
  * Multi-statement writes use `db.batch` (one implicit transaction, statements run in order).
  */
-import type { Completion, Note, PlanItem, PlanStatus } from '../../src/shared/api-schemas';
+import type {
+  Completion,
+  Incident,
+  IncidentFile,
+  IncidentType,
+  IntervalUnit,
+  Note,
+  Priority,
+  Task,
+  TaskKind,
+} from '../../src/shared/api-schemas';
 
 // ---------------------------------------------------------------------------
 // Rows & mappers
@@ -17,26 +27,52 @@ export interface CompletionRow {
   logged_by: string;
   note: string | null;
   plan_item_id: string | null;
+  partial: number;
   created_at: string;
   deleted_at: string | null;
   deleted_by: string | null;
 }
 
-export interface PlanItemRow {
+export interface TaskRow {
   id: string;
-  week_start: string;
-  task_id: string | null;
-  title: string | null;
-  assignee: string | null;
-  note: string | null;
-  status: PlanStatus;
+  title: string;
+  title_es: string | null;
+  steps: string;
+  steps_es: string | null;
+  safety: string | null;
+  kind: TaskKind;
+  interval_count: number | null;
+  interval_unit: IntervalUnit | null;
+  due_on: string | null;
+  priority: Priority;
+  archived_at: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
-  /** joined: latest non-deleted completion linked via completions.plan_item_id */
-  c_id: string | null;
-  c_done_on: string | null;
-  c_done_by: string | null;
+}
+
+export interface IncidentRow {
+  id: string;
+  occurred_at: string;
+  type: IncidentType;
+  location: string | null;
+  description: string;
+  people: string | null;
+  reported_by: string;
+  created_at: string;
+  deleted_at: string | null;
+  deleted_by: string | null;
+}
+
+export interface IncidentFileRow {
+  id: string;
+  incident_id: string;
+  r2_key: string;
+  file_name: string;
+  content_type: string;
+  size: number;
+  uploaded_by: string;
+  created_at: string;
 }
 
 export interface NoteRow {
@@ -59,26 +95,66 @@ export function toCompletion(row: CompletionRow): Completion {
     loggedBy: row.logged_by,
     note: row.note,
     planItemId: row.plan_item_id,
+    partial: row.partial === 1,
     createdAt: row.created_at,
   };
 }
 
-export function toPlanItem(row: PlanItemRow): PlanItem {
+function splitSteps(value: string | null): string[] {
+  return (value ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+}
+
+/** Steps are stored one per line; an empty Spanish list is stored as NULL. */
+function joinSteps(steps: string[] | null): string | null {
+  return steps && steps.length > 0 ? steps.join('\n') : null;
+}
+
+export function toTask(row: TaskRow): Task {
+  const stepsEs = splitSteps(row.steps_es);
   return {
     id: row.id,
-    weekStart: row.week_start,
-    taskId: row.task_id,
     title: row.title,
-    assignee: row.assignee,
-    note: row.note,
-    status: row.status,
+    titleEs: row.title_es,
+    steps: splitSteps(row.steps),
+    stepsEs: stepsEs.length > 0 ? stepsEs : null,
+    safety: row.safety,
+    kind: row.kind,
+    intervalCount: row.interval_count,
+    intervalUnit: row.interval_unit,
+    dueOn: row.due_on,
+    priority: row.priority,
+    archivedAt: row.archived_at,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    completion:
-      row.c_id && row.c_done_on && row.c_done_by
-        ? { id: row.c_id, doneOn: row.c_done_on, doneBy: row.c_done_by }
-        : null,
+  };
+}
+
+export function toIncident(row: IncidentRow): Incident {
+  return {
+    id: row.id,
+    occurredAt: row.occurred_at,
+    type: row.type,
+    location: row.location,
+    description: row.description,
+    people: row.people,
+    reportedBy: row.reported_by,
+    createdAt: row.created_at,
+  };
+}
+
+export function toIncidentFile(row: IncidentFileRow): IncidentFile {
+  return {
+    id: row.id,
+    incidentId: row.incident_id,
+    fileName: row.file_name,
+    contentType: row.content_type,
+    size: row.size,
+    uploadedBy: row.uploaded_by,
+    createdAt: row.created_at,
   };
 }
 
@@ -109,7 +185,7 @@ export interface NewCompletion {
   doneBy: string;
   loggedBy: string;
   note: string | null;
-  planItemId: string | null;
+  partial: boolean;
   createdAt: string;
 }
 
@@ -139,13 +215,16 @@ export async function listCompletions(
   return results.map(toCompletion);
 }
 
-/** Latest non-deleted completion per catalog task, no date limit. */
+/**
+ * Per task, the newest full sign-off and the newest partial one (at most two rows each), so a
+ * partial never hides the last full sign-off. The domain decides whether the partial counts.
+ */
 export async function latestCompletions(db: D1Database): Promise<Completion[]> {
   const { results } = await db
     .prepare(
       `SELECT * FROM (
          SELECT c.*, ROW_NUMBER() OVER (
-           PARTITION BY task_id ORDER BY done_on DESC, created_at DESC, id DESC
+           PARTITION BY task_id, partial ORDER BY done_on DESC, created_at DESC, id DESC
          ) AS rn
          FROM completions c
          WHERE deleted_at IS NULL AND task_id IS NOT NULL
@@ -156,16 +235,12 @@ export async function latestCompletions(db: D1Database): Promise<Completion[]> {
   return results.map(toCompletion);
 }
 
-/**
- * Inserts a completion and, when linked, marks the plan item `done` in the same batch.
- * The link is nulled by the INSERT itself if the plan item vanished in the meantime.
- */
 export async function insertCompletion(db: D1Database, c: NewCompletion): Promise<void> {
-  const insert = db
+  await db
     .prepare(
       `INSERT INTO completions
-         (id, task_id, title, done_on, done_by, logged_by, note, plan_item_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT id FROM plan_items WHERE id = ?), ?)`,
+         (id, task_id, title, done_on, done_by, logged_by, note, plan_item_id, partial, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
     )
     .bind(
       c.id,
@@ -175,158 +250,224 @@ export async function insertCompletion(db: D1Database, c: NewCompletion): Promis
       c.doneBy,
       c.loggedBy,
       c.note,
-      c.planItemId,
+      c.partial ? 1 : 0,
       c.createdAt,
-    );
-  if (!c.planItemId) {
-    await insert.run();
-    return;
-  }
-  await db.batch([
-    insert,
-    db
-      .prepare(`UPDATE plan_items SET status = 'done', updated_at = ? WHERE id = ?`)
-      .bind(c.createdAt, c.planItemId),
-  ]);
+    )
+    .run();
 }
 
-/**
- * Soft-deletes a completion and reverts its linked plan item to `planned`
- * unless another live completion still links it.
- */
 export async function softDeleteCompletion(
   db: D1Database,
   row: CompletionRow,
   deletedBy: string,
   now: string,
 ): Promise<void> {
-  const del = db
+  await db
     .prepare(
       'UPDATE completions SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL',
     )
-    .bind(now, deletedBy, row.id);
-  if (!row.plan_item_id) {
-    await del.run();
-    return;
-  }
-  await db.batch([
-    del,
-    db
-      .prepare(
-        `UPDATE plan_items SET status = 'planned', updated_at = ?
-         WHERE id = ? AND status = 'done'
-           AND NOT EXISTS (
-             SELECT 1 FROM completions
-             WHERE plan_item_id = plan_items.id AND deleted_at IS NULL
-           )`,
-      )
-      .bind(now, row.plan_item_id),
-  ]);
-}
-
-// ---------------------------------------------------------------------------
-// Plan items
-// ---------------------------------------------------------------------------
-
-const PLAN_ITEM_SELECT = `
-  SELECT p.*, c.id AS c_id, c.done_on AS c_done_on, c.done_by AS c_done_by
-  FROM plan_items p
-  LEFT JOIN completions c ON c.id = (
-    SELECT id FROM completions
-    WHERE plan_item_id = p.id AND deleted_at IS NULL
-    ORDER BY created_at DESC, id DESC
-    LIMIT 1
-  )`;
-
-export async function getPlanItem(db: D1Database, id: string): Promise<PlanItemRow | null> {
-  return db.prepare(`${PLAN_ITEM_SELECT} WHERE p.id = ?`).bind(id).first<PlanItemRow>();
-}
-
-export async function listPlanItems(db: D1Database, weekStart: string): Promise<PlanItem[]> {
-  const { results } = await db
-    .prepare(`${PLAN_ITEM_SELECT} WHERE p.week_start = ? ORDER BY p.created_at, p.id`)
-    .bind(weekStart)
-    .all<PlanItemRow>();
-  return results.map(toPlanItem);
-}
-
-/** The plan item (any status) for a catalog task in a week — at most one by unique index. */
-export async function findPlanItemForTask(
-  db: D1Database,
-  weekStart: string,
-  taskId: string,
-): Promise<PlanItemRow | null> {
-  return db
-    .prepare(`${PLAN_ITEM_SELECT} WHERE p.week_start = ? AND p.task_id = ?`)
-    .bind(weekStart, taskId)
-    .first<PlanItemRow>();
-}
-
-export interface NewPlanItem {
-  id: string;
-  weekStart: string;
-  taskId: string | null;
-  title: string | null;
-  assignee: string | null;
-  note: string | null;
-  createdBy: string;
-  now: string;
-}
-
-export async function insertPlanItem(db: D1Database, p: NewPlanItem): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO plan_items
-         (id, week_start, task_id, title, assignee, note, status, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?)`,
-    )
-    .bind(p.id, p.weekStart, p.taskId, p.title, p.assignee, p.note, p.createdBy, p.now, p.now)
+    .bind(now, deletedBy, row.id)
     .run();
 }
 
-export interface PlanItemPatch {
-  assignee?: string | null | undefined;
-  note?: string | null | undefined;
-  status?: 'planned' | 'skipped' | undefined;
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+export async function getTask(db: D1Database, id: string): Promise<TaskRow | null> {
+  return db.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first<TaskRow>();
 }
 
-/** Applies a patch unless the item became `done` meanwhile; returns whether a row changed. */
-export async function updatePlanItem(
+/** Active tasks by title, or every task (archived too) when `includeArchived`. */
+export async function listTasks(db: D1Database, includeArchived: boolean): Promise<Task[]> {
+  const where = includeArchived ? '' : 'WHERE archived_at IS NULL';
+  const { results } = await db
+    .prepare(`SELECT * FROM tasks ${where} ORDER BY title COLLATE NOCASE, id`)
+    .all<TaskRow>();
+  return results.map(toTask);
+}
+
+export async function taskIdExists(db: D1Database, id: string): Promise<boolean> {
+  const row = await db.prepare('SELECT 1 AS ok FROM tasks WHERE id = ?').bind(id).first();
+  return row !== null;
+}
+
+export interface TaskWrite {
+  title: string;
+  titleEs: string | null;
+  steps: string[];
+  stepsEs: string[] | null;
+  safety: string | null;
+  kind: TaskKind;
+  intervalCount: number | null;
+  intervalUnit: IntervalUnit | null;
+  dueOn: string | null;
+  priority: Priority;
+}
+
+export async function insertTask(
   db: D1Database,
   id: string,
-  patch: PlanItemPatch,
+  t: TaskWrite,
+  createdBy: string,
   now: string,
-): Promise<boolean> {
-  const sets: string[] = [];
-  const binds: (string | null)[] = [];
-  if (patch.assignee !== undefined) {
-    sets.push('assignee = ?');
-    binds.push(patch.assignee);
-  }
-  if (patch.note !== undefined) {
-    sets.push('note = ?');
-    binds.push(patch.note);
-  }
-  if (patch.status !== undefined) {
-    sets.push('status = ?');
-    binds.push(patch.status);
-  }
-  sets.push('updated_at = ?');
-  binds.push(now);
-  const res = await db
-    .prepare(`UPDATE plan_items SET ${sets.join(', ')} WHERE id = ? AND status != 'done'`)
-    .bind(...binds, id)
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO tasks
+         (id, title, title_es, steps, steps_es, safety, kind, interval_count, interval_unit,
+          due_on, priority, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      id,
+      t.title,
+      t.titleEs,
+      t.steps.join('\n'),
+      joinSteps(t.stepsEs),
+      t.safety,
+      t.kind,
+      t.intervalCount,
+      t.intervalUnit,
+      t.dueOn,
+      t.priority,
+      createdBy,
+      now,
+      now,
+    )
     .run();
-  return res.meta.changes > 0;
 }
 
-/** Hard-deletes a plan item unless it is `done`; returns whether a row was deleted. */
-export async function deletePlanItem(db: D1Database, id: string): Promise<boolean> {
-  const res = await db
-    .prepare(`DELETE FROM plan_items WHERE id = ? AND status != 'done'`)
-    .bind(id)
+export async function updateTask(
+  db: D1Database,
+  id: string,
+  t: TaskWrite,
+  archivedAt: string | null,
+  now: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `UPDATE tasks SET title = ?, title_es = ?, steps = ?, steps_es = ?, safety = ?, kind = ?,
+         interval_count = ?, interval_unit = ?, due_on = ?, priority = ?, archived_at = ?,
+         updated_at = ?
+       WHERE id = ?`,
+    )
+    .bind(
+      t.title,
+      t.titleEs,
+      t.steps.join('\n'),
+      joinSteps(t.stepsEs),
+      t.safety,
+      t.kind,
+      t.intervalCount,
+      t.intervalUnit,
+      t.dueOn,
+      t.priority,
+      archivedAt,
+      now,
+      id,
+    )
     .run();
-  return res.meta.changes > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Incidents
+// ---------------------------------------------------------------------------
+
+export async function getIncident(db: D1Database, id: string): Promise<IncidentRow | null> {
+  return db.prepare('SELECT * FROM incidents WHERE id = ?').bind(id).first<IncidentRow>();
+}
+
+/** Non-deleted incidents, newest `occurred_at` first, with their file counts. */
+export async function listIncidents(db: D1Database): Promise<(Incident & { fileCount: number })[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT i.*, (SELECT COUNT(*) FROM incident_files f WHERE f.incident_id = i.id) AS file_count
+       FROM incidents i WHERE i.deleted_at IS NULL
+       ORDER BY i.occurred_at DESC, i.id DESC`,
+    )
+    .all<IncidentRow & { file_count: number }>();
+  return results.map((row) => ({ ...toIncident(row), fileCount: row.file_count }));
+}
+
+export async function insertIncident(
+  db: D1Database,
+  i: Incident & { location: string | null; people: string | null },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO incidents
+         (id, occurred_at, type, location, description, people, reported_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      i.id,
+      i.occurredAt,
+      i.type,
+      i.location,
+      i.description,
+      i.people,
+      i.reportedBy,
+      i.createdAt,
+    )
+    .run();
+}
+
+export async function softDeleteIncident(
+  db: D1Database,
+  id: string,
+  deletedBy: string,
+  now: string,
+): Promise<void> {
+  await db
+    .prepare(
+      'UPDATE incidents SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL',
+    )
+    .bind(now, deletedBy, id)
+    .run();
+}
+
+export async function listIncidentFiles(
+  db: D1Database,
+  incidentId: string,
+): Promise<IncidentFileRow[]> {
+  const { results } = await db
+    .prepare('SELECT * FROM incident_files WHERE incident_id = ? ORDER BY created_at, id')
+    .bind(incidentId)
+    .all<IncidentFileRow>();
+  return results;
+}
+
+export async function countIncidentFiles(db: D1Database, incidentId: string): Promise<number> {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM incident_files WHERE incident_id = ?')
+    .bind(incidentId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+export async function getIncidentFile(db: D1Database, id: string): Promise<IncidentFileRow | null> {
+  return db.prepare('SELECT * FROM incident_files WHERE id = ?').bind(id).first<IncidentFileRow>();
+}
+
+export async function insertIncidentFile(db: D1Database, f: IncidentFileRow): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO incident_files
+         (id, incident_id, r2_key, file_name, content_type, size, uploaded_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      f.id,
+      f.incident_id,
+      f.r2_key,
+      f.file_name,
+      f.content_type,
+      f.size,
+      f.uploaded_by,
+      f.created_at,
+    )
+    .run();
 }
 
 // ---------------------------------------------------------------------------

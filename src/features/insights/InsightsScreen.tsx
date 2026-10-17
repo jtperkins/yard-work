@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { CalendarCheck, Gauge, Sprout, Timer, UsersRound } from 'lucide-react';
-import { useCatalog, useCompletions, useTaskStatuses } from '../../api';
-import { byPersonWeekly, dailyCounts, onTimeRateByCategory } from '../../domain/stats';
+import { CalendarCheck, Gauge, Sprout, UsersRound } from 'lucide-react';
+import { useCompletions, useTaskStatuses } from '../../api';
+import { byPersonWeekly, dailyCounts } from '../../domain/stats';
 import { useLang, useT } from '../../i18n';
 import {
   addDays,
@@ -13,24 +13,20 @@ import {
 } from '../../shared/dates';
 import {
   Card,
-  CategoryDot,
   EmptyState,
   Grid,
-  HBarList,
   Heatmap,
   PageHeader,
   SkeletonText,
   Stack,
   StackedBarChart,
   StatTile,
-  type HBarItem,
 } from '../../ui';
-import { categoryColor, categoryLabel } from '../log/describe';
 import { capitalize } from '../log/format';
 import { LoadError } from '../log/LoadError';
 import { personChart, recentCounts } from './model';
 
-/** Days covered by the heatmap and the on-time rates (today and the 364 before it). */
+/** Days covered by the heatmap (today and the 364 before it). */
 const WINDOW_DAYS = 365;
 const PERSON_WEEKS = 12;
 const REFERENCE_MONDAY = '2024-01-01';
@@ -38,7 +34,6 @@ const REFERENCE_MONDAY = '2024-01-01';
 export function InsightsScreen() {
   const t = useT('insights');
   const { lang } = useLang();
-  const catalog = useCatalog();
   const today = todayCR();
   const start = addDays(today, -(WINDOW_DAYS - 1));
 
@@ -63,20 +58,13 @@ export function InsightsScreen() {
         activeDays++;
       }
     }
-    const onTime = onTimeRateByCategory(catalog.tasks, completions, catalog.house);
-    const totals = onTime.reduce(
-      (acc, c) => ({ onTime: acc.onTime + c.onTime, total: acc.total + c.total }),
-      { onTime: 0, total: 0 },
-    );
     return {
       heat,
       activeDays,
-      onTime,
-      totals,
       recent: recentCounts(completions, today, 30),
       people: personChart(byPersonWeekly(completions, PERSON_WEEKS, today), t('byPerson.other')),
     };
-  }, [completions, start, today, catalog, t]);
+  }, [completions, start, today, t]);
 
   const weekdayLabels = useMemo(
     () =>
@@ -99,23 +87,20 @@ export function InsightsScreen() {
     formatDate(date, lang, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   const shortDate = (date: ISODate) => formatDate(date, lang, { day: 'numeric', month: 'short' });
 
-  if (query.isError) {
+  if (query.isError || statuses.isError) {
     return (
       <Stack gap="lg">
         <PageHeader title={t('title')} description={t('description')} />
-        <LoadError title={t('loadError')} onRetry={() => void query.refetch()} />
+        <LoadError
+          title={t('loadError')}
+          onRetry={() => {
+            void query.refetch();
+            void statuses.refetch();
+          }}
+        />
       </Stack>
     );
   }
-
-  const onTimeItems: HBarItem[] =
-    stats?.onTime.map((c) => ({
-      key: c.category,
-      label: categoryLabel(catalog, c.category, lang),
-      value: c.rate,
-      leading: <CategoryDot color={categoryColor(catalog, c.category)} />,
-      detail: c.total > 0 ? t('onTime.detail', { onTime: c.onTime, total: c.total }) : undefined,
-    })) ?? [];
 
   const tableLabels = { showTableLabel: t('table.show'), hideTableLabel: t('table.hide') };
 
@@ -123,7 +108,7 @@ export function InsightsScreen() {
     <Stack gap="lg">
       <PageHeader title={t('title')} description={t('description')} />
 
-      <Grid as="section" aria-label={t('stats.label')} cols={2} mdCols={4} gap="sm">
+      <Grid as="section" aria-label={t('stats.label')} cols={1} mdCols={3} gap="sm">
         <StatTile
           label={t('stats.last30')}
           icon={CalendarCheck}
@@ -137,23 +122,6 @@ export function InsightsScreen() {
           tone="success"
           value={stats ? integer.format(stats.activeDays) : '—'}
           hint={t('stats.activeDaysHint')}
-        />
-        <StatTile
-          label={t('stats.onTime')}
-          icon={Timer}
-          tone="accent"
-          value={
-            stats && stats.totals.total > 0
-              ? percent.format(stats.totals.onTime / stats.totals.total)
-              : '—'
-          }
-          hint={
-            stats
-              ? stats.totals.total > 0
-                ? t('stats.onTimeHint', { count: stats.totals.total })
-                : t('stats.onTimeNone')
-              : undefined
-          }
         />
         <StatTile
           label={t('stats.onTrack')}
@@ -198,45 +166,32 @@ export function InsightsScreen() {
             />
           </Card>
 
-          <Grid lgCols={2} gap="lg" align="start">
-            <Card padding="md">
-              <HBarList
-                title={t('onTime.title')}
-                description={t('onTime.description')}
-                items={onTimeItems}
-                max={1}
-                formatValue={(v) => percent.format(v)}
-                emptyLabel={t('onTime.none')}
+          <Card padding="md">
+            {stats.people.series.length === 0 ? (
+              <EmptyState
+                size="compact"
+                icon={UsersRound}
+                title={t('byPerson.emptyTitle')}
+                description={t('byPerson.emptyBody')}
               />
-            </Card>
-
-            <Card padding="md">
-              {stats.people.series.length === 0 ? (
-                <EmptyState
-                  size="compact"
-                  icon={UsersRound}
-                  title={t('byPerson.emptyTitle')}
-                  description={t('byPerson.emptyBody')}
-                />
-              ) : (
-                <StackedBarChart
-                  title={t('byPerson.title')}
-                  description={t('byPerson.description')}
-                  series={stats.people.series}
-                  rows={stats.people.weeks.map((w) => ({
-                    key: w.weekStart,
-                    label: shortDate(w.weekStart),
-                    fullLabel: t('byPerson.weekOf', { date: shortDate(w.weekStart) }),
-                    values: w.values,
-                  }))}
-                  formatValue={(v) => integer.format(v)}
-                  totalLabel={t('byPerson.total')}
-                  categoryColumnLabel={t('byPerson.weekColumn')}
-                  {...tableLabels}
-                />
-              )}
-            </Card>
-          </Grid>
+            ) : (
+              <StackedBarChart
+                title={t('byPerson.title')}
+                description={t('byPerson.description')}
+                series={stats.people.series}
+                rows={stats.people.weeks.map((w) => ({
+                  key: w.weekStart,
+                  label: shortDate(w.weekStart),
+                  fullLabel: t('byPerson.weekOf', { date: shortDate(w.weekStart) }),
+                  values: w.values,
+                }))}
+                formatValue={(v) => integer.format(v)}
+                totalLabel={t('byPerson.total')}
+                categoryColumnLabel={t('byPerson.weekColumn')}
+                {...tableLabels}
+              />
+            )}
+          </Card>
         </>
       )}
     </Stack>

@@ -4,7 +4,7 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import type { Completion, Note, PlanItem } from '../shared/api-schemas';
+import type { Completion, Incident, IncidentFile, Note } from '../shared/api-schemas';
 import { createApiClient, type ApiClient, type FetchLike } from './client';
 import { ApiClientProvider } from './context';
 
@@ -115,31 +115,42 @@ const uuid = () => {
 export function makeCompletion(overrides: Partial<Completion> = {}): Completion {
   return {
     id: uuid(),
-    taskId: 'mow-lawn',
+    taskId: 'chapia',
     title: null,
     doneOn: '2026-10-01',
     doneBy: 'JT',
     loggedBy: 'JT',
     note: null,
     planItemId: null,
+    partial: false,
     createdAt: '2026-10-01T15:00:00.000Z',
     ...overrides,
   };
 }
 
-export function makePlanItem(overrides: Partial<PlanItem> = {}): PlanItem {
+export function makeIncident(overrides: Partial<Incident> = {}): Incident {
   return {
     id: uuid(),
-    weekStart: '2026-10-05',
-    taskId: 'mow-lawn',
-    title: null,
-    assignee: null,
-    note: null,
-    status: 'planned',
-    createdBy: 'JT',
-    createdAt: '2026-10-05T12:00:00.000Z',
-    updatedAt: '2026-10-05T12:00:00.000Z',
-    completion: null,
+    occurredAt: '2026-10-16T20:30:00.000Z',
+    type: 'sighting',
+    location: 'Back gate',
+    description: 'Man looking over the fence',
+    people: null,
+    reportedBy: 'JT',
+    createdAt: '2026-10-16T21:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function makeIncidentFile(overrides: Partial<IncidentFile> = {}): IncidentFile {
+  return {
+    id: uuid(),
+    incidentId: uuid(),
+    fileName: 'photo.png',
+    contentType: 'image/png',
+    size: 1234,
+    uploadedBy: 'JT',
+    createdAt: '2026-10-16T21:05:00.000Z',
     ...overrides,
   };
 }

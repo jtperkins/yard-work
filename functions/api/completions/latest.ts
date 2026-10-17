@@ -1,4 +1,4 @@
-/** GET /api/completions/latest (public) → latest non-deleted completion per task, no date limit. */
+/** GET /api/completions/latest (public) → newest full + newest partial sign-off per task, no date limit. */
 import type { CompletionsRes } from '../../../src/shared/api-schemas';
 import { json, latestCompletions, route } from '../../../server/lib';
 

@@ -144,14 +144,14 @@ describe('cookies', () => {
 describe('requiresSession', () => {
   it('lets anyone read public data', () => {
     expect(requiresSession('GET', '/api/completions')).toBe(false);
-    expect(requiresSession('GET', '/api/plan')).toBe(false);
+    expect(requiresSession('GET', '/api/tasks')).toBe(false);
     expect(requiresSession('HEAD', '/api/me')).toBe(false);
   });
 
   it('gates every write except login/logout', () => {
     expect(requiresSession('POST', '/api/completions')).toBe(true);
-    expect(requiresSession('DELETE', '/api/plan/x')).toBe(true);
-    expect(requiresSession('PATCH', '/api/plan/x')).toBe(true);
+    expect(requiresSession('DELETE', '/api/incidents/x')).toBe(true);
+    expect(requiresSession('PATCH', '/api/tasks/x')).toBe(true);
     expect(requiresSession('POST', '/api/login')).toBe(false);
     expect(requiresSession('POST', '/api/logout/')).toBe(false);
     expect(requiresSession('POST', '/api/nope')).toBe(true);
@@ -162,5 +162,12 @@ describe('requiresSession', () => {
     expect(requiresSession('GET', '/api/notes/')).toBe(true);
     expect(requiresSession('GET', '/api/notes/abc')).toBe(true);
     expect(requiresSession('GET', '/api/notesy')).toBe(false);
+  });
+
+  it('gates reading incidents and their files', () => {
+    expect(requiresSession('GET', '/api/incidents')).toBe(true);
+    expect(requiresSession('GET', '/api/incidents/abc')).toBe(true);
+    expect(requiresSession('GET', '/api/incidents/files/abc')).toBe(true);
+    expect(requiresSession('GET', '/api/incidentsy')).toBe(false);
   });
 });

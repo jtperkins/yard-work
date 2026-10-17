@@ -1,4 +1,4 @@
-/** DELETE /api/completions/:id (session) → OkRes. Soft delete; reverts a linked plan item. */
+/** DELETE /api/completions/:id (session) → OkRes. Soft delete. */
 import type { OkRes } from '../../../src/shared/api-schemas';
 import { nowISO } from '../../../src/shared/dates';
 import {

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeApi, createTestQueryClient, type FakeApi } from '../api/test-utils';
+import { makeTask } from '../domain/test-fixtures';
 import { TestProviders } from '../features/shared/test-utils';
 import type { Lang } from '../i18n';
 import { AppRoutes } from './routes';
@@ -13,7 +14,9 @@ function renderAt(path: string, { lang = 'en' as Lang, me = null as string | nul
   api.on('GET /api/me', { name: me });
   api.on('GET /api/completions/latest', { completions: [] });
   api.on('GET /api/completions', { completions: [] });
-  api.on('GET /api/plan', { items: [] });
+  api.on('GET /api/tasks', { tasks: [makeTask({ id: 'chapia', title: 'Chapia' })] });
+  api.on('GET /api/tasks/chapia', { task: makeTask({ id: 'chapia', title: 'Chapia' }) });
+  api.on('GET /api/incidents', { incidents: [] });
   api.on('GET /api/notes', { notes: [] });
   const qc = createTestQueryClient();
   const result = render(
@@ -35,11 +38,8 @@ afterEach(() => vi.useRealTimers());
 describe('app routes', () => {
   it.each([
     ['/', /^Good (morning|afternoon|evening)$/],
-    ['/week', 'This week'],
-    ['/week/2026-10-05', 'This week'],
-    ['/week/2026-10-12', 'Next week'],
     ['/tasks', 'Tasks'],
-    ['/tasks/mow-lawn', 'Mow the lawn (chapia)'],
+    ['/tasks/chapia', 'Chapia'],
     ['/login', 'Sign in'],
     ['/nope', 'Page not found'],
   ])('%s renders its screen', async (path, heading) => {
@@ -47,13 +47,43 @@ describe('app routes', () => {
     expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument();
   });
 
-  it.each(['/calendar', '/calendar/2026-10', '/log', '/insights'])(
-    '%s renders a page heading',
+  it.each(['/log', '/insights'])('%s renders a page heading', async (path) => {
+    renderAt(path);
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+  });
+
+  it.each(['/week', '/week/2026-10-12', '/calendar', '/calendar/2026-10'])(
+    'the old %s URL lands on the Board',
     async (path) => {
       renderAt(path);
-      expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('heading', {
+          level: 1,
+          name: /^Good (morning|afternoon|evening)$/,
+        }),
+      ).toBeInTheDocument();
     },
   );
+
+  it('has no Week or Calendar link in the sidebar or the tab bar', async () => {
+    renderAt('/');
+    await screen.findByRole('heading', { level: 1 });
+    for (const nav of screen.getAllByRole('navigation', { name: 'Main navigation' })) {
+      expect(within(nav).queryByRole('link', { name: 'Week' })).not.toBeInTheDocument();
+      expect(within(nav).queryByRole('link', { name: 'Calendar' })).not.toBeInTheDocument();
+      expect(within(nav).getByRole('link', { name: 'Incidents' })).toHaveAttribute(
+        'href',
+        '/incidents',
+      );
+    }
+  });
+
+  it('gates the task form and incidents behind sign-in', async () => {
+    renderAt('/tasks/new');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Sign in to see this page' }),
+    ).toBeInTheDocument();
+  });
 
   it('gates /handoff behind sign-in', async () => {
     renderAt('/handoff');
@@ -92,18 +122,19 @@ describe('app routes', () => {
     expect(screen.getAllByText('Signed in as JT').length).toBeGreaterThan(0);
     signedIn.unmount();
 
-    renderAt('/week');
+    renderAt('/tasks');
     await waitFor(() =>
       expect(screen.getAllByRole('link', { name: 'Sign in' })[0]).toHaveAttribute(
         'href',
-        '/login?next=%2Fweek',
+        '/login?next=%2Ftasks',
       ),
     );
   });
 
   it('path builders', () => {
-    expect(paths.week('2026-10-05')).toBe('/week/2026-10-05');
-    expect(paths.calendar()).toBe('/calendar');
-    expect(paths.login('/week')).toBe('/login?next=%2Fweek');
+    expect(paths.task('chapia')).toBe('/tasks/chapia');
+    expect(paths.taskEdit('chapia')).toBe('/tasks/chapia/edit');
+    expect(paths.incident('abc')).toBe('/incidents/abc');
+    expect(paths.login('/tasks')).toBe('/login?next=%2Ftasks');
   });
 });

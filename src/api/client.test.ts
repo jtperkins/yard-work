@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApiClient } from './client';
 import { ApiRequestError, isConflict, isNetworkError, isUnauthorized } from './errors';
 import { newId } from './ids';
-import { createFakeApi, jsonResponse, makeCompletion, makePlanItem } from './test-utils';
+import { makeTask } from '../domain/test-fixtures';
+import { createFakeApi, jsonResponse, makeCompletion, makeIncidentFile } from './test-utils';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 
@@ -32,18 +33,38 @@ describe('createApiClient', () => {
     expect(call?.search.has('to')).toBe(false);
   });
 
-  it('unwraps latest completions, plan items and notes', async () => {
+  it('unwraps latest completions, tasks and notes', async () => {
     const api = createFakeApi();
-    const item = makePlanItem();
+    const task = makeTask({ id: 'chapia' });
     api.on('GET /api/completions/latest', { completions: [] });
-    api.on('GET /api/plan', { items: [item] });
+    api.on('GET /api/tasks', { tasks: [task] });
+    api.on('GET /api/tasks/chapia', { task });
     api.on('GET /api/notes', { notes: [] });
     const client = createApiClient({ fetch: api.fetch });
 
     await expect(client.latestCompletions()).resolves.toEqual([]);
-    await expect(client.getPlan('2026-10-05')).resolves.toEqual([item]);
-    expect(api.callsTo('GET /api/plan')[0]?.search.get('week')).toBe('2026-10-05');
+    await expect(client.listTasks({ archived: true })).resolves.toEqual([task]);
+    expect(api.callsTo('GET /api/tasks')[0]?.search.get('archived')).toBe('1');
+    await expect(client.listTasks()).resolves.toEqual([task]);
+    expect(api.callsTo('GET /api/tasks')[1]?.search.has('archived')).toBe(false);
+    await expect(client.getTask('chapia')).resolves.toEqual(task);
     await expect(client.listNotes()).resolves.toEqual([]);
+  });
+
+  it('uploads a file as the raw body with its type and encoded name', async () => {
+    const api = createFakeApi();
+    const stored = makeIncidentFile({ incidentId: ID });
+    api.on(`POST /api/incidents/${ID}/files`, jsonResponse(stored, 201));
+    const client = createApiClient({ fetch: api.fetch });
+    const file = new File([new Uint8Array(4)], 'mi foto.heic', { type: '' });
+
+    await expect(client.uploadIncidentFile(ID, file, 'image/heic')).resolves.toEqual(stored);
+    const call = api.callsTo(`POST /api/incidents/${ID}/files`)[0];
+    expect(call?.init?.headers).toMatchObject({
+      'content-type': 'image/heic',
+      'x-file-name': 'mi%20foto.heic',
+    });
+    expect(call?.init?.body).toBe(file);
   });
 
   it('sends JSON bodies for writes and encodes ids into paths', async () => {
@@ -52,22 +73,22 @@ describe('createApiClient', () => {
     api.on('POST /api/completions', (call) =>
       jsonResponse({ ...completion, ...(call.body as object) }, 201),
     );
-    api.on(`PATCH /api/plan/${ID}`, makePlanItem({ id: ID, status: 'skipped' }));
+    api.on('PATCH /api/tasks/chapia', { task: makeTask({ id: 'chapia', priority: 'low' }) });
     api.on(`DELETE /api/completions/${ID}`, { ok: true });
     const client = createApiClient({ fetch: api.fetch });
 
     await client.createCompletion({
       id: ID,
-      taskId: 'mow-lawn',
+      taskId: 'chapia',
       doneOn: '2026-10-01',
       doneBy: 'JT',
     });
     const post = api.callsTo('POST /api/completions')[0];
     expect(post?.init?.headers).toMatchObject({ 'content-type': 'application/json' });
-    expect(post?.body).toEqual({ id: ID, taskId: 'mow-lawn', doneOn: '2026-10-01', doneBy: 'JT' });
+    expect(post?.body).toEqual({ id: ID, taskId: 'chapia', doneOn: '2026-10-01', doneBy: 'JT' });
 
-    await expect(client.updatePlanItem(ID, { status: 'skipped' })).resolves.toMatchObject({
-      status: 'skipped',
+    await expect(client.updateTask('chapia', { priority: 'low' })).resolves.toMatchObject({
+      priority: 'low',
     });
     await expect(client.deleteCompletion(ID)).resolves.toEqual({ ok: true });
 
@@ -77,12 +98,10 @@ describe('createApiClient', () => {
 
   it('turns `{error}` bodies into ApiRequestError with status and message', async () => {
     const api = createFakeApi();
-    api.on('POST /api/plan', jsonResponse({ error: 'That task is already planned' }, 409));
+    api.on('POST /api/tasks', jsonResponse({ error: 'That task is already planned' }, 409));
     const client = createApiClient({ fetch: api.fetch });
 
-    const err = await client
-      .createPlanItem({ id: ID, weekStart: '2026-10-05', taskId: 'mow-lawn' })
-      .catch((e: unknown) => e);
+    const err = await client.createTask({ title: 'Gate', kind: 'once' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiRequestError);
     expect(err).toMatchObject({
       status: 409,

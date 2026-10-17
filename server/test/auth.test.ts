@@ -158,9 +158,10 @@ describe('auth gating', () => {
   const writes: Array<[method: string, path: string]> = [
     ['POST', '/api/completions'],
     ['DELETE', `/api/completions/${someId}`],
-    ['POST', '/api/plan'],
-    ['PATCH', `/api/plan/${someId}`],
-    ['DELETE', `/api/plan/${someId}`],
+    ['POST', '/api/tasks'],
+    ['PATCH', '/api/tasks/some-task'],
+    ['POST', '/api/incidents'],
+    ['DELETE', `/api/incidents/${someId}`],
     ['POST', '/api/notes'],
     ['DELETE', `/api/notes/${someId}`],
   ];
@@ -174,7 +175,7 @@ describe('auth gating', () => {
   it('a signed-out write does not touch the database', async () => {
     await api(h, '/api/completions', {
       method: 'POST',
-      body: { id: uuid(), taskId: 'mow-lawn', doneOn: todayCR(), doneBy: 'JT' },
+      body: { id: uuid(), taskId: 'chapia', doneOn: todayCR(), doneBy: 'JT' },
     });
     const row = await h.db.prepare('SELECT COUNT(*) AS n FROM completions').first<{ n: number }>();
     expect(row?.n).toBe(0);
@@ -184,7 +185,7 @@ describe('auth gating', () => {
     expect((await api(h, '/api/notes')).status).toBe(401);
     expect((await api(h, '/api/completions')).status).toBe(200);
     expect((await api(h, '/api/completions/latest')).status).toBe(200);
-    expect((await api(h, `/api/plan?week=2026-10-05`)).status).toBe(200);
+    expect((await api(h, '/api/tasks')).status).toBe(200);
   });
 });
 

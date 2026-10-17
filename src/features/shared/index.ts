@@ -6,7 +6,7 @@ export { RouterLink } from './RouterLink';
 export { AppToastProvider } from './AppToastProvider';
 export { TaskStatusPill } from './TaskStatusPill';
 export type { TaskStatusPillProps } from './TaskStatusPill';
-export { STATE_VIEW, formatMonthRanges, useTaskText } from './taskText';
+export { STATE_VIEW, useTaskText } from './taskText';
 export type { TaskText } from './taskText';
 export { useErrorMessage } from './errors';
 export { useToday } from './today';

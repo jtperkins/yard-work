@@ -1,14 +1,9 @@
 import type { Completion } from '../../shared/api-schemas';
-import { CATEGORIES, type Category, type Task, type TaskId } from '../../shared/catalog-schema';
 import { addDays, isISODate, type ISODate } from '../../shared/dates';
-
-/** Category filter value: a catalog category, ad-hoc work, or '' for everything. */
-export type LogCategoryFilter = Category | 'adhoc' | '';
 
 export interface LogFilters {
   /** Person (matched case-insensitively against "done by"); '' = everyone. */
   person: string;
-  category: LogCategoryFilter;
   /** Inclusive date range; '' = open-ended (the server then defaults to its lookback). */
   from: ISODate | '';
   to: ISODate | '';
@@ -18,13 +13,10 @@ export interface LogFilters {
 export const DEFAULT_LOG_DAYS = 90;
 
 export function defaultFilters(today: ISODate): LogFilters {
-  return { person: '', category: '', from: addDays(today, -(DEFAULT_LOG_DAYS - 1)), to: today };
+  return { person: '', from: addDays(today, -(DEFAULT_LOG_DAYS - 1)), to: today };
 }
 
-const isCategoryFilter = (v: string | null): v is LogCategoryFilter =>
-  v === '' || v === 'adhoc' || (CATEGORIES as readonly string[]).includes(v ?? '#');
-
-/** Reads filters from the URL (`?person=&category=&from=&to=`), falling back to the defaults. */
+/** Reads filters from the URL (`?person=&from=&to=`), falling back to the defaults. */
 export function readFilters(params: URLSearchParams, today: ISODate): LogFilters {
   const defaults = defaultFilters(today);
   const date = (key: 'from' | 'to'): ISODate | '' => {
@@ -32,10 +24,8 @@ export function readFilters(params: URLSearchParams, today: ISODate): LogFilters
     if (v === null) return defaults[key];
     return v === '' || !isISODate(v) ? '' : v;
   };
-  const category = params.get('category');
   return {
     person: params.get('person')?.trim() ?? '',
-    category: isCategoryFilter(category) ? category : '',
     from: date('from'),
     to: date('to'),
   };
@@ -46,7 +36,6 @@ export function writeFilters(filters: LogFilters, today: ISODate): URLSearchPara
   const defaults = defaultFilters(today);
   const params = new URLSearchParams();
   if (filters.person) params.set('person', filters.person);
-  if (filters.category) params.set('category', filters.category);
   if (filters.from !== defaults.from) params.set('from', filters.from);
   if (filters.to !== defaults.to) params.set('to', filters.to);
   return params;
@@ -74,13 +63,12 @@ export function peopleOf(completions: readonly Pick<Completion, 'doneBy'>[]): st
 }
 
 /**
- * Applies the person and category filters (the date range is applied by the server query) and
- * sorts newest first: by date, then by when it was logged.
+ * Applies the person and date filters and sorts newest first: by date, then by when it was
+ * logged.
  */
 export function filterCompletions(
   completions: readonly Completion[],
   filters: LogFilters,
-  taskById: ReadonlyMap<TaskId, Pick<Task, 'category'>>,
 ): Completion[] {
   const person = personKey(filters.person);
   return completions
@@ -88,10 +76,6 @@ export function filterCompletions(
       if (person && personKey(c.doneBy) !== person) return false;
       if (filters.from && c.doneOn < filters.from) return false;
       if (filters.to && c.doneOn > filters.to) return false;
-      if (filters.category === 'adhoc') return c.taskId === null;
-      if (filters.category) {
-        return c.taskId !== null && taskById.get(c.taskId)?.category === filters.category;
-      }
       return true;
     })
     .sort((a, b) =>

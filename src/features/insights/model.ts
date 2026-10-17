@@ -43,18 +43,26 @@ export function personChart(weekly: PersonWeekly, otherLabel: string): PersonCha
   return { series, weeks };
 }
 
-/** Number of completions dated in [from, to]. */
+type CountedCompletion = Pick<Completion, 'doneOn'> & Partial<Pick<Completion, 'partial'>>;
+
+/**
+ * Number of full sign-offs dated in [from, to]. Partial sign-offs are work in progress and are
+ * not counted (a missing `partial` counts as full).
+ */
 export function countBetween(
-  completions: readonly Pick<Completion, 'doneOn'>[],
+  completions: readonly CountedCompletion[],
   from: ISODate,
   to: ISODate,
 ): number {
-  return completions.reduce((n, c) => (isWithin(c.doneOn, from, to) ? n + 1 : n), 0);
+  return completions.reduce(
+    (n, c) => (c.partial !== true && isWithin(c.doneOn, from, to) ? n + 1 : n),
+    0,
+  );
 }
 
 /** Sign-offs in the last `days` days (ending today) and in the `days` before that. */
 export function recentCounts(
-  completions: readonly Pick<Completion, 'doneOn'>[],
+  completions: readonly CountedCompletion[],
   today: ISODate,
   days: number,
 ): { current: number; previous: number } {

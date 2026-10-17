@@ -1,0 +1,71 @@
+/** 'incidents' namespace — incident reports. es/incidents.ts mirrors it (tsc-enforced). */
+const incidents = {
+  title: 'Incidents',
+  description:
+    'Sightings, people poking around, trespassing. Only people who are signed in can see these.',
+  report: 'Report incident',
+  list: 'Incident reports',
+  files_one: '{count} file',
+  files_other: '{count} files',
+  emptyTitle: 'No incidents reported',
+  emptyBody: 'Reports of sightings, people poking around or trespassing show up here.',
+
+  'type.sighting': 'Sighting',
+  'type.poking-around': 'Someone poking around',
+  'type.trespassing': 'Trespassing',
+  'type.other': 'Other',
+
+  'form.title': 'Report an incident',
+  'form.back': 'All incidents',
+  'form.when': 'When',
+  'form.whenHint': 'Costa Rica time. Defaults to now.',
+  'form.type': 'What kind',
+  'form.where': 'Where',
+  'form.wherePlaceholder': 'Back gate, road, neighbour’s fence…',
+  'form.what': 'What happened',
+  'form.whatHint': 'What you saw or heard, in plain words.',
+  'form.people': 'People or names involved',
+  'form.peoplePlaceholder': 'Descriptions, names, vehicle…',
+  'form.attachments': 'Photos, videos and files',
+  'form.attachHint':
+    'Up to {count} files. Images and PDFs up to {image} MB, videos up to {video} MB.',
+  'form.addFiles': 'Add files',
+  'form.submit': 'Save report',
+  'form.errorWhat': 'Describe what happened.',
+  'form.errorWhen': 'Pick when it happened.',
+  'form.errorFuture': 'It can’t have happened in the future.',
+  'form.failed': 'The report didn’t save.',
+
+  'file.typeNotAllowed': '“{name}” isn’t a supported file type.',
+  'file.tooLarge': '“{name}” is too large (max {max} MB for this type).',
+  'file.tooMany': 'You can attach up to {count} files.',
+  'file.uploading': 'Uploading…',
+  'file.failed': 'Upload failed',
+  'file.retry': 'Try again',
+  'file.remove': 'Remove',
+  'file.list': 'Attached files',
+
+  'saved.title': 'Report saved',
+  'saved.failedBody':
+    'Some files didn’t upload. Try them again, or open the report and add them later.',
+  'saved.open': 'Open the report',
+
+  'detail.back': 'All incidents',
+  'detail.notFoundTitle': 'Incident not found',
+  'detail.notFoundBody': 'That report doesn’t exist, or it was deleted.',
+  'detail.reportedBy': 'Reported by {name}',
+  'detail.when': 'When',
+  'detail.where': 'Where',
+  'detail.people': 'People involved',
+  'detail.description': 'What happened',
+  'detail.attachments': 'Attachments',
+  'detail.noAttachments': 'No files attached.',
+  'detail.delete': 'Delete report',
+  'detail.deleteTitle': 'Delete this report?',
+  'detail.deleteBody': 'It is removed for everyone, files included.',
+  'detail.deleteConfirm': 'Delete',
+  'detail.deleted': 'Report deleted',
+  'detail.deleteFailed': 'Couldn’t delete the report. Please try again.',
+};
+
+export default incidents;

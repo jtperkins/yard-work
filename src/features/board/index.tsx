@@ -1,18 +1,9 @@
-import {
-  AlarmClock,
-  CalendarCheck,
-  CalendarRange,
-  ListChecks,
-  RefreshCw,
-  Sprout,
-} from 'lucide-react';
+import { AlarmClock, CalendarCheck, ListChecks, RefreshCw, Sprout } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { paths } from '../../app/paths';
-import { useCatalog, useCompletions, useSession, useTaskStatuses } from '../../api';
-import type { TaskStatus } from '../../domain/schedule';
+import { useCompletions, useSession, useTasks, useTaskStatuses } from '../../api';
+import { isDailyTask, type TaskStatus } from '../../domain/schedule';
 import { useFormatDate, useT } from '../../i18n';
-import type { Task } from '../../shared/catalog-schema';
+import type { Task } from '../../shared/api-schemas';
 import { CR_TIMEZONE, compareISODate, weekEnd, weekStart, type ISODate } from '../../shared/dates';
 import {
   Button,
@@ -21,7 +12,6 @@ import {
   Checklist,
   EmptyState,
   Grid,
-  LinkButton,
   PageHeader,
   SectionHeader,
   Skeleton,
@@ -82,12 +72,14 @@ function groupStatuses(
     const task = taskById.get(status.taskId);
     if (!task) continue;
     const { state } = status;
+    // Finished one-offs are off the board entirely.
+    if (state === 'done') continue;
     if (state === 'overdue' || state === 'never') groups.overdueCount += 1;
     const dueByEnd = status.nextDue !== undefined && compareISODate(status.nextDue, end) <= 0;
     if ((state === 'due-soon' || state === 'ok') && dueByEnd) groups.dueThisWeekCount += 1;
-    if (state === 'dormant') continue;
 
-    if (status.frequencyDays <= 1) groups.daily.push({ task, status });
+    if (isDailyTask(task)) groups.daily.push({ task, status });
+    else if (status.inProgress) groups.attention.push({ task, status });
     else if (state === 'overdue' || state === 'never' || state === 'due-soon') {
       groups.attention.push({ task, status });
     } else if (dueByEnd) groups.upcoming.push({ task, status });
@@ -108,13 +100,17 @@ export function BoardScreen() {
   const formatDate = useFormatDate();
   const today = useToday();
   const session = useSession();
-  const { taskById } = useCatalog();
+  const tasks = useTasks();
   const statuses = useTaskStatuses(today);
   const doneThisWeek = useCompletions({ from: weekStart(today), to: today });
   const errorMessage = useErrorMessage();
   const [signing, setSigning] = useState<Task | null>(null);
   const [showAllAttention, setShowAllAttention] = useState(false);
 
+  const taskById = useMemo(
+    () => new Map((tasks.data ?? []).map((task) => [task.id, task])),
+    [tasks.data],
+  );
   const groups = useMemo(
     () => (statuses.data ? groupStatuses(statuses.data.list, taskById, today) : null),
     [statuses.data, taskById, today],
@@ -140,11 +136,6 @@ export function BoardScreen() {
               ? t('summary.allClear')
               : t('summary.attention', { count: attentionCount })
             : undefined
-        }
-        actions={
-          <LinkButton as={Link} to={paths.week()} variant="secondary" leadingIcon={CalendarRange}>
-            {t('planWeek')}
-          </LinkButton>
         }
       />
 
@@ -193,7 +184,11 @@ export function BoardScreen() {
               />
               <StatTile
                 label={t('stats.doneThisWeek')}
-                value={doneThisWeek.data ? String(doneThisWeek.data.length) : '–'}
+                value={
+                  doneThisWeek.data
+                    ? String(doneThisWeek.data.filter((c) => !c.partial).length)
+                    : '–'
+                }
                 hint={t('stats.doneThisWeekHint')}
                 tone="primary"
                 icon={CalendarCheck}
@@ -298,11 +293,6 @@ export function BoardScreen() {
               id="board-upcoming"
               title={t('upcoming.title')}
               count={groups.upcoming.length}
-              actions={
-                <LinkButton as={Link} to={paths.week()} variant="ghost" size="sm">
-                  {t('upcoming.openWeek')}
-                </LinkButton>
-              }
             />
             <Checklist label={t('upcoming.list')}>
               {groups.upcoming.map(({ task, status }) => (

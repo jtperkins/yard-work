@@ -1,7 +1,7 @@
 import { useT, type TKey } from '../../i18n';
 import { Card, CardHeader, StepList } from '../../ui';
 
-const STEPS = ['signOff', 'plan', 'track', 'notes', 'catalog', 'access'] as const;
+const STEPS = ['signOff', 'incidents', 'track', 'notes', 'catalog', 'access'] as const;
 
 /** Static "How this works" guide for whoever looks after the place next. */
 export function HowItWorks() {

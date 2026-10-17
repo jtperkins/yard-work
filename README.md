@@ -1,48 +1,48 @@
 # Yard Work
 
 House & grounds accountability app for a house-sit in Bajo La Paz (San Ramón, Alajuela, Costa Rica):
-recurring yard, house and cat-care tasks, a weekly plan with a shopping/prep list, and job-site style
-sign-offs so anyone — owner, neighbour, future sitters, the yard worker — can see what's due and hand
-off with zero tribal knowledge. English and Spanish.
+one-off and recurring tasks, job-site style sign-offs (including partial ones, "half done, finishing
+next week"), handoff notes and a basic incident log, so anyone — owner, neighbour, future sitters, the
+yard worker — can see what's due and hand off with zero tribal knowledge. English and Spanish.
 
 - **Frontend:** Vite + React 19 + TypeScript (strict) + Tailwind CSS v4, react-router 7, TanStack Query.
 - **Backend:** Cloudflare Pages Functions (`functions/`) + Cloudflare D1 (SQLite) for records
-  (sign-offs, weekly plan, handoff notes).
-- **Catalog:** static JSON in `data/` (tasks, supplies, house config), edited by commit.
-- **Auth:** name + shared house code → signed HttpOnly cookie (90 days). Everything is readable
-  without signing in except handoff notes; every write needs a session. This is a drive-by
-  deterrent, not real security.
+  (tasks, sign-offs, handoff notes, incidents) + a private Cloudflare R2 bucket for incident files.
+- **Tasks:** stored in D1 and created, edited and archived in the app (no code change or deploy).
+- **Auth:** name + shared house code → signed HttpOnly cookie (90 days). The board, tasks and log are
+  readable without signing in; handoff notes and incidents need a session, and so does every write.
+  This is a drive-by deterrent, not real security.
 
 ## Screens
 
-| Route                  | What                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| `/` Board              | Today's daily jobs, what needs attention (overdue first), stat tiles, sign-off              |
-| `/week/:weekStart?`    | Plan a week: suggestions, ad-hoc jobs, assign/skip/remove, supplies list, WhatsApp, print   |
-| `/calendar/:ym?`       | Month grid: signed off (dot), planned (square), coming due (ring); tap a day for details    |
-| `/tasks`, `/tasks/:id` | The catalog with search and filters; a task's steps, safety, supplies, schedule and history |
-| `/log`                 | Every sign-off, filter by person / category / dates, soft-delete, CSV export                |
-| `/insights`            | Activity heatmap, on-time rate by category, sign-offs per person per week                   |
-| `/handoff` (signed in) | State of the house, pinned essentials, notes between sitters, how-it-works                  |
-| `/login`               | Name + house code                                                                           |
+| Route                                  | What                                                                                    |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `/` Board                              | Today's daily jobs, what needs attention (overdue first), stat tiles, sign-off          |
+| `/tasks`, `/tasks/:id`                 | Task list (All, One-off, Recurring, Done, Archived) with search; a task's steps and log |
+| `/tasks/new`, `/tasks/:id/edit` (auth) | Create and edit a task; archive or unarchive from its page                              |
+| `/incidents` (signed in)               | Incident reports; `/incidents/new` to report one, `/incidents/:id` for the detail       |
+| `/log`                                 | Every sign-off, filter by person / dates, soft-delete, CSV export                       |
+| `/insights`                            | Activity heatmap, sign-offs per person per week                                         |
+| `/handoff` (signed in)                 | State of the house, pinned essentials, notes between sitters, how-it-works              |
+| `/login`                               | Name + house code                                                                       |
+
+The old `/week` and `/calendar` URLs redirect to the Board.
 
 ## Repository layout
 
-| Path                    | What                                                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------- |
-| `data/`                 | Task catalog, supplies, house config (bilingual JSON)                                       |
-| `migrations/`           | D1 schema (`wrangler d1 migrations`)                                                        |
-| `functions/`            | Pages Functions route handlers + middleware (`/api/*`)                                      |
-| `server/lib/`           | Server helpers: session, http, repo, validation; `server/test/` D1-backed API tests         |
-| `src/shared/`           | Contracts shared by browser and server: catalog + API zod schemas, CR-timezone date helpers |
-| `src/domain/`           | Pure scheduling / planning / stats logic                                                    |
-| `src/ui/`               | Design-system component library (dumb components, tokens only) — see `src/ui/README.md`     |
-| `src/features/`         | Screens (compose `src/ui` only)                                                             |
-| `src/i18n/`             | EN/ES dictionaries per namespace, `useT`, `LanguageProvider`                                |
-| `src/api/`              | Typed fetch client + TanStack Query hooks                                                   |
-| `src/app/`              | App shell, providers, router                                                                |
-| `src/styles/tokens.css` | Design tokens (light + dark) mapped into Tailwind                                           |
-| `scripts/`              | Dev seed (`seed-dev.sql`) and its generator                                                 |
+| Path                    | What                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| `migrations/`           | D1 schema (`wrangler d1 migrations`)                                                                |
+| `functions/`            | Pages Functions route handlers + middleware (`/api/*`)                                              |
+| `server/lib/`           | Server helpers: session, http, repo, validation; `server/test/` D1-backed API tests                 |
+| `src/shared/`           | Contracts shared by browser and server: API zod schemas, language helpers, CR-timezone date helpers |
+| `src/domain/`           | Pure scheduling / stats logic                                                                       |
+| `src/ui/`               | Design-system component library (dumb components, tokens only) — see `src/ui/README.md`             |
+| `src/features/`         | Screens (compose `src/ui` only)                                                                     |
+| `src/i18n/`             | EN/ES dictionaries per namespace, `useT`, `LanguageProvider`                                        |
+| `src/api/`              | Typed fetch client + TanStack Query hooks                                                           |
+| `src/app/`              | App shell, providers, router                                                                        |
+| `src/styles/tokens.css` | Design tokens (light + dark) mapped into Tailwind                                                   |
 
 ## Local development
 
@@ -53,17 +53,16 @@ No Cloudflare account is needed: wrangler runs D1 locally under `.wrangler/`.
 pnpm install
 cp .dev.vars.example .dev.vars        # set HOUSE_CODE (8+ chars) and SESSION_SECRET (any long string locally)
 pnpm db:migrate:local                 # create the local D1 database
-pnpm db:seed:local                    # optional: ~7 months of sample sign-offs, 3 weeks of plans, handoff notes
 pnpm dev                              # http://localhost:5173 (Vite) → /api proxied to wrangler pages dev on :8788
 ```
 
 Sign in at <http://localhost:5173/login> with any name and the `HOUSE_CODE` from your `.dev.vars`.
 
-- **Seed data.** `scripts/seed-dev.sql` is generated by `node scripts/generate-seed.mjs` from the
-  real catalog; dates are relative to "today in Costa Rica", so re-running `pnpm db:seed:local` any
-  time gives fresh, realistic data (it **clears** the local completions, plan and notes tables first).
-  Edit the generator, not the SQL, then regenerate.
-- **Reset the local database:** delete `.wrangler/state`, then migrate (and seed) again.
+- **Starting data.** Migration `0002` seeds exactly two tasks (`rust-inspection`, every 6 months, and
+  `chapia`, every 14 days) and one partial `chapia` sign-off, so a fresh local database matches
+  production. There is no other sample data.
+- **Reset the local database:** delete `.wrangler/state`, then run `pnpm db:migrate:local` again.
+  This also resets the local R2 bucket that holds incident files.
 - **Production-like run:** `pnpm build` then open <http://localhost:8788> (wrangler serves `dist/`
   and the functions together, exactly as Pages does).
 - **Component kit:** the dev-only kitchen sink lives at <http://localhost:5173/ui>.
@@ -76,54 +75,39 @@ Sign in at <http://localhost:5173/login> with any name and the `HOUSE_CODE` from
 | `pnpm typecheck`                                  | `tsc -b` over app, server and tooling projects                           |
 | `pnpm lint` / `pnpm format`                       | ESLint (incl. the no-raw-controls rule for screens) / Prettier           |
 | `pnpm test` / `pnpm test:watch` / `pnpm coverage` | Vitest (projects: `unit`, `web` (jsdom), `server` (Node + Miniflare D1)) |
-| `pnpm db:migrate:local` / `pnpm db:seed:local`    | Apply migrations / load the dev seed into the local D1                   |
+| `pnpm db:migrate:local`                           | Apply migrations to the local D1                                         |
 | `pnpm check`                                      | typecheck + lint + test + build (what CI runs)                           |
 
 Server tests start a fresh in-memory D1 per test file through wrangler's `getPlatformProxy()` and
 apply the real migrations, so they need no setup.
 
-## Editing the catalog
+## Managing tasks (in the app)
 
-The task list is plain JSON in `data/` — change it with a commit; the site redeploys on push to `main`
-(there is no catalog editing in the UI).
+Tasks live in the D1 `tasks` table. Anyone signed in can add and edit them: **Tasks → New task**. Changes
+show immediately, with no commit or deploy.
 
-- `data/tasks.json` — each task has a stable kebab-case `id` (**never rename or reuse an id**:
-  sign-offs and plan items in D1 reference it), bilingual `name` / `instructions` (one step per line)
-  / optional `safety`, a `category`, an `area` (key in `house.json` → `areas`), `frequencyDays` with
-  optional `frequencyDaysBySeason` (`rainy` / `dry`), optional `activeMonths` (1–12; the task is
-  "out of season" and never due outside them), `estimatedMinutes`, `who` (`yard` / `sitter` /
-  `anyone`), `priority`, `supplies` (ids from `supplies.json`, each with an optional per-task note)
-  and `confirmed`.
-- `data/supplies.json` — bilingual supply names, optional `whereToBuy` hint and notes.
-- `data/house.json` — timezone, rainy-season months, the yard worker's day (1 = Mon … 7 = Sun),
-  name suggestions for "Done by", area labels and category labels/colours.
+- A task is **one-off** (optionally with a due date) or **recurring** (every N days, weeks or months).
+  Steps are one per line, with optional Spanish text (English is shown when it is left empty), safety
+  notes and a priority.
+- The id is a slug of the title (`Fix gate latch` → `fix-gate-latch`, then `-2`, `-3` on a clash) and never
+  changes when the task is edited. `new` and `edit` are reserved, so a task titled "New" gets `new-task`.
+- **Archive** a task from its page to retire it. It disappears from the Board and the default list, its
+  old sign-offs keep their title in the Log and CSV export, and **Tasks → Archived → Unarchive** brings it
+  back. Tasks are never deleted.
+- **Partial sign-offs.** In the sign-off sheet choose "Partially done" and say what is left. The task shows
+  "In progress", the schedule does not reset, and it counts as done only when someone signs it off fully.
+  Only full sign-offs are counted on the Board and in Insights.
 
-How due dates work: next due = last sign-off + the frequency for the season **at that sign-off**.
-A task never signed off counts as due now. "Due soon" means within 3 days (daily tasks: not yet done
-today). "On track" = in-season tasks that are not overdue.
-
-**Verifying drafts.** Every starter task was drafted for a humid highland property and ships with
-`"confirmed": false`, which shows a "Draft — needs confirming" badge. Walk through each task with
-the owner, fix steps, cadence and supplies for this house, then set `"confirmed": true`.
-
-Changes to the drafted catalog worth checking during that walk-through:
-
-- `repaint-metal` and `treat-exterior-wood` are **once a year, in the dry season** (365 days,
-  active Dec–Apr). The original plan said every 180 days, but with dry-season-only painting a
-  180-day due date always fell in the rainy months and rolled over to the next December anyway, so
-  the screens claimed "every 180 days" while the real cadence was yearly. If the owner wants two
-  coats a year regardless of weather, set 180 and drop `activeMonths` instead.
-- Pots under the eaves have their own year-round task, `water-sheltered-pots` (every 4 days), since
-  rain never reaches them; `water-garden` stays dry-season only.
-
-`pnpm test` validates the catalog (schema, unique ids, supply/area references) and CI fails on invalid
-data. To retire a task, delete it from `tasks.json`; its old sign-offs stay in D1 and show in the
-log under the old task id.
+How due dates work: a recurring task's next due = last **full** sign-off + its interval (calendar months for
+month intervals, clamped to month end). A task never signed off fully counts as due now. "Due soon" means
+within 3 days (and never right after a sign-off). A one-off is done after one full sign-off; before that it is
+"never done", or on time / due soon / overdue against its due date. "On track" = open tasks that are not
+overdue.
 
 ## Handoff notes
 
 `/handoff` is the only screen that needs sign-in to **read**, because notes hold private details.
-Notes live only in D1 — **never put private information in the repo** (`data/` is public).
+Notes live only in D1 — **never put private information in the repo**.
 
 After the first deploy, sign in on the live site and create these **pinned** notes (tick "Pin to
 top"; the composer's "Start from the template" button fills in this outline). Notes can't be edited:
@@ -197,6 +181,28 @@ runs and passes).
 7. Sign in on the live site and add the pinned handoff notes (above). Share the link and the house
    code with the people who need it.
 
+## Incidents and R2
+
+`/incidents` is a basic log of sightings, people poking around and trespassing. Each report has a time,
+type, place, a description, names of people involved and attachments (photos, videos, PDFs). Everything,
+including file downloads, needs a session.
+
+Files live in a **private** R2 bucket bound as `INCIDENT_FILES` in `wrangler.toml`. One-time setup:
+
+```sh
+pnpm dlx wrangler r2 bucket create yard-work-incidents
+pnpm dlx wrangler r2 bucket list      # confirm it is listed
+```
+
+Never enable a public `r2.dev` URL or a custom domain on the bucket: files are only served through
+`/api/incidents/files/:id`, which checks the session and sends `nosniff`, a sandboxing CSP, `no-store`
+and a safe `Content-Disposition`. If a deploy fails on the R2 binding, add the binding in the dashboard
+(Pages → yard-work → Settings → Bindings) and re-run the job.
+
+Limits: 10 files per report, images and PDFs up to 10 MB, videos up to 50 MB; JPEG, PNG, WebP, HEIC/HEIF,
+MP4, MOV and PDF only. HEIC is stored as is and offered as a download because most browsers cannot show it.
+Local `pnpm dev` and the server tests use an in-memory or local R2, so no Cloudflare account is needed.
+
 ## Deploy
 
 Every push to `main` deploys via `.github/workflows/ci.yml`: the `check` job runs typecheck, lint,
@@ -213,7 +219,7 @@ Schema changes: add a new numbered file to `migrations/` (never edit an applied 
 - **Rotate the house code:** `pnpm dlx wrangler pages secret put HOUSE_CODE --project-name yard-work`
   (existing sessions stay signed in). Rotating `SESSION_SECRET` signs everyone out.
 - **Back up the records:** `pnpm dlx wrangler d1 export yard-work --remote --output=yard-work-backup.sql`.
-- **Audit trail:** deleting a sign-off or a note is a soft delete — the row keeps `deleted_at` /
-  `deleted_by` in D1. Plan items are hard-deleted (only when not signed off).
-- Sign-offs and plan items carry client-generated ids, so a retried request on a flaky connection
+- **Audit trail:** deleting a sign-off, a note or an incident is a soft delete — the row keeps
+  `deleted_at` / `deleted_by` in D1. Tasks are archived, never deleted.
+- Sign-offs, notes and incidents carry client-generated ids, so a retried request on a flaky connection
   never creates duplicates.

@@ -1,5 +1,4 @@
-import type { Catalog } from '../../domain/catalog';
-import type { Task } from '../../shared/catalog-schema';
+import type { Task } from '../../shared/api-schemas';
 
 /** Lower-case, accent-free text for forgiving search ("jardin" finds "Jardín"). */
 export function normalize(text: string): string {
@@ -11,24 +10,13 @@ export function normalize(text: string): string {
 }
 
 /**
- * Everything a task can be found by, in both languages: name, category, area and supply names
- * (searching in English while the UI is in Spanish still works).
+ * Everything a task can be found by, in both languages: title and steps (searching in English
+ * while the UI is in Spanish still works).
  */
-export function searchText(task: Task, catalog: Pick<Catalog, 'house' | 'supplyById'>): string {
-  const { house, supplyById } = catalog;
-  const parts: string[] = [
-    task.name.en,
-    task.name.es,
-    house.categories[task.category].en,
-    house.categories[task.category].es,
-  ];
-  const area = house.areas[task.area];
-  if (area) parts.push(area.en, area.es);
-  for (const { id } of task.supplies) {
-    const supply = supplyById.get(id);
-    if (supply) parts.push(supply.name.en, supply.name.es);
-  }
-  return normalize(parts.join(' '));
+export function searchText(task: Task): string {
+  return normalize(
+    [task.title, task.titleEs ?? '', ...task.steps, ...(task.stepsEs ?? [])].join(' '),
+  );
 }
 
 /** Tasks whose search text contains every word of the query. */

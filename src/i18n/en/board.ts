@@ -8,7 +8,6 @@ const board = {
   'summary.allClear': 'Everything’s on track. Nice work.',
   'summary.attention_one': '{count} job needs attention today.',
   'summary.attention_other': '{count} jobs need attention today.',
-  planWeek: 'Plan the week',
 
   'stats.label': 'At a glance',
   'stats.overdue': 'Overdue',
@@ -18,7 +17,7 @@ const board = {
   'stats.doneThisWeek': 'Done this week',
   'stats.doneThisWeekHint': 'since Monday',
   'stats.onTrack': 'On track',
-  'stats.onTrackHint': 'of in-season tasks',
+  'stats.onTrackHint': 'of open tasks',
 
   'today.title': 'Today',
   'today.description': 'Every-day jobs. Tick them off as you go.',
@@ -35,7 +34,6 @@ const board = {
 
   'upcoming.title': 'Later this week',
   'upcoming.list': 'Jobs due later this week',
-  'upcoming.openWeek': 'Open the week plan',
 
   'readOnly.title': 'You’re looking around read-only',
   'readOnly.body': 'Sign in with the house code to sign off work.',

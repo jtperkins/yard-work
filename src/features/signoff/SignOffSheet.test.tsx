@@ -1,11 +1,11 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCatalog } from '../../domain/catalog';
+import { makeTask } from '../../domain/test-fixtures';
 import { createFakeApi, jsonResponse, makeCompletion } from '../../api/test-utils';
 import { renderScreen } from '../shared/test-utils';
 import { SignOffSheet } from './SignOffSheet';
 
-const task = getCatalog().taskById.get('mow-lawn')!;
+const task = makeTask({ id: 'chapia', title: 'Chapia' });
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -29,7 +29,7 @@ function setup(props: Partial<Parameters<typeof SignOffSheet>[0]> = {}, me: stri
 
 describe('SignOffSheet', () => {
   it('posts the sign-off with a client id, the chosen person, date and note', async () => {
-    const { api, user, onClose } = setup({ planItemId: '11111111-1111-4111-8111-111111111111' });
+    const { api, user, onClose } = setup();
     api.on('POST /api/completions', ({ body }) =>
       jsonResponse(makeCompletion({ ...(body as object), loggedBy: 'JT' }), 201),
     );
@@ -49,34 +49,52 @@ describe('SignOffSheet', () => {
     await waitFor(() => expect(api.callsTo('POST /api/completions')).toHaveLength(1));
     const body = api.callsTo('POST /api/completions')[0]!.body as Record<string, unknown>;
     expect(body).toMatchObject({
-      taskId: 'mow-lawn',
+      taskId: 'chapia',
       doneOn: '2026-10-06',
       doneBy: 'Luis',
       note: 'Front and back',
-      planItemId: '11111111-1111-4111-8111-111111111111',
     });
+    expect(body).not.toHaveProperty('partial');
     expect(body.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(body).not.toHaveProperty('title');
     expect(onClose).toHaveBeenCalled();
     // Announced through the toaster's always-mounted live region.
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Signed off: Mow/));
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Signed off: Chapia/));
   });
 
-  it('signs off ad-hoc work by title', async () => {
-    const { api, user } = setup({ task: null, adHocTitle: 'Fix the gate latch' });
+  it('offers Dario as a done-by suggestion', async () => {
+    setup();
+    const dialog = await screen.findByRole('dialog');
+    const input = within(dialog).getByRole('combobox', { name: /Done by/ });
+    const list = dialog.ownerDocument.getElementById(input.getAttribute('list') ?? '');
+    const options = Array.from(list?.querySelectorAll('option') ?? []).map((o) => o.value);
+    expect(options).toContain('Dario');
+  });
+
+  it('a partial sign-off needs a note saying what is left, then sends partial', async () => {
+    const { api, user } = setup();
     api.on('POST /api/completions', ({ body }) =>
       jsonResponse(makeCompletion(body as object), 201),
     );
     await screen.findByRole('dialog');
-    expect(screen.getByText('Extra job')).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: /Done by/ })).toHaveValue('JT'),
     );
-    await user.click(screen.getByRole('button', { name: 'Sign off' }));
+    await user.click(screen.getByRole('radio', { name: 'Partially done' }));
+    expect(screen.getByRole('textbox', { name: /What’s left/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Save progress' }));
+    expect(await screen.findByText('Say what’s left to do.')).toBeInTheDocument();
+    expect(api.callsTo('POST /api/completions')).toHaveLength(0);
+
+    await user.type(screen.getByRole('textbox', { name: /What’s left/ }), 'Edges not done');
+    await user.click(screen.getByRole('button', { name: 'Save progress' }));
     await waitFor(() => expect(api.callsTo('POST /api/completions')).toHaveLength(1));
-    const body = api.callsTo('POST /api/completions')[0]!.body as Record<string, unknown>;
-    expect(body).toMatchObject({ title: 'Fix the gate latch', doneBy: 'JT', doneOn: '2026-10-07' });
-    expect(body).not.toHaveProperty('taskId');
+    expect(api.callsTo('POST /api/completions')[0]!.body).toMatchObject({
+      taskId: 'chapia',
+      partial: true,
+      note: 'Edges not done',
+    });
   });
 
   it('validates required name and future dates without posting', async () => {

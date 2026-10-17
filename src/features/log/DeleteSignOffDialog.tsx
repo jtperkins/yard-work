@@ -1,9 +1,10 @@
-import { useCatalog, useUndoSignOff } from '../../api';
+import { useTasks, useUndoSignOff } from '../../api';
 import { useLang, useT } from '../../i18n';
 import type { Completion } from '../../shared/api-schemas';
 import { formatDate } from '../../shared/dates';
 import { ConfirmDialog, useToast } from '../../ui';
 import { describeWork } from './describe';
+import { taskMap } from './taskMap';
 
 export interface DeleteSignOffDialogProps {
   /** The sign-off to delete; the dialog is open while this is set. */
@@ -13,13 +14,13 @@ export interface DeleteSignOffDialogProps {
 
 /**
  * Confirms and soft-deletes a sign-off (the server keeps it with `deleted_at`/`deleted_by` and
- * puts a linked plan item back to "planned"). Signed-in users only.
+ * and the schedule reopens). Signed-in users only.
  */
 export function DeleteSignOffDialog({ completion, onClose }: DeleteSignOffDialogProps) {
   const t = useT('log');
   const tc = useT('common');
   const { lang } = useLang();
-  const catalog = useCatalog();
+  const tasks = useTasks({ archived: true });
   const { toast } = useToast();
   const remove = useUndoSignOff();
 
@@ -42,7 +43,7 @@ export function DeleteSignOffDialog({ completion, onClose }: DeleteSignOffDialog
       description={
         completion
           ? t('delete.body', {
-              task: describeWork(completion, catalog, lang).title,
+              task: describeWork(completion, taskMap(tasks.data), lang).title,
               date: formatDate(completion.doneOn, lang, { day: 'numeric', month: 'long' }),
               doneBy: completion.doneBy,
             })

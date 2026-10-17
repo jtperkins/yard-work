@@ -7,8 +7,8 @@ import { LoginScreen, safeNext } from './index';
 describe('safeNext', () => {
   it.each([
     [null, '/'],
-    ['/week', '/week'],
-    ['/tasks/mow-lawn?x=1', '/tasks/mow-lawn?x=1'],
+    ['/tasks', '/tasks'],
+    ['/tasks/chapia?x=1', '/tasks/chapia?x=1'],
     ['//evil.example', '/'],
     ['/\\evil.example', '/'],
     ['https://evil.example', '/'],
@@ -21,7 +21,12 @@ describe('safeNext', () => {
 describe('LoginScreen', () => {
   function setup(me: string | null = null) {
     const api = createFakeApi();
-    return renderScreen(<LoginScreen />, { api, me, path: '/login?next=%2Fweek', route: '/login' });
+    return renderScreen(<LoginScreen />, {
+      api,
+      me,
+      path: '/login?next=%2Ftasks',
+      route: '/login',
+    });
   }
 
   it('signs in with name + house code and returns to `next`', async () => {
@@ -29,10 +34,10 @@ describe('LoginScreen', () => {
     api.on('POST /api/login', ({ body }) =>
       jsonResponse({ name: (body as { name: string }).name }),
     );
-    await user.type(await screen.findByRole('combobox', { name: /Name/ }), '  José ');
+    await user.type(await screen.findByRole('textbox', { name: /Name/ }), '  José ');
     await user.type(screen.getByLabelText(/House code/), 'open-sesame');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    await waitFor(() => expect(location()).toBe('/week'));
+    await waitFor(() => expect(location()).toBe('/tasks'));
     expect(api.callsTo('POST /api/login')[0]!.body).toEqual({ name: 'José', code: 'open-sesame' });
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Welcome, José'));
   });
@@ -40,7 +45,7 @@ describe('LoginScreen', () => {
   it('explains a wrong house code and clears it', async () => {
     const { api, user, location } = setup();
     api.on('POST /api/login', jsonResponse({ error: 'Wrong code' }, 401));
-    await user.type(await screen.findByRole('combobox', { name: /Name/ }), 'JT');
+    await user.type(await screen.findByRole('textbox', { name: /Name/ }), 'JT');
     const code = screen.getByLabelText(/House code/);
     await user.type(code, 'nope');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -49,7 +54,7 @@ describe('LoginScreen', () => {
     ).toBeInTheDocument();
     expect(code).toHaveValue('');
     expect(code).toHaveAttribute('aria-invalid', 'true');
-    expect(location()).toBe('/login?next=%2Fweek');
+    expect(location()).toBe('/login?next=%2Ftasks');
   });
 
   it('validates required fields before calling the API', async () => {
@@ -63,11 +68,13 @@ describe('LoginScreen', () => {
     const { api, user } = setup('JT');
     api.on('POST /api/logout', { name: null });
     expect(
-      await screen.findByText('Signed in as JT. You can sign off work and plan the week.'),
+      await screen.findByText(
+        'Signed in as JT. You can sign off work, edit tasks and report incidents.',
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/week');
+    expect(screen.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/tasks');
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
-    expect(await screen.findByRole('combobox', { name: /Name/ })).toBeInTheDocument();
+    expect(await screen.findByRole('textbox', { name: /Name/ })).toBeInTheDocument();
   });
 
   it('is in Spanish when the UI is', async () => {

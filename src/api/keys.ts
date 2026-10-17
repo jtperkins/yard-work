@@ -31,9 +31,16 @@ export const queryKeys = {
       [ROOT, 'completions', 'list', normalizeRange(query)] as const,
     latest: () => [ROOT, 'completions', 'latest'] as const,
   },
-  plan: {
-    all: [ROOT, 'plan'] as const,
-    week: (weekStart: string) => [ROOT, 'plan', weekStart] as const,
+  tasks: {
+    all: [ROOT, 'tasks'] as const,
+    /** every task, archived included, when `archived` */
+    list: (archived: boolean) => [ROOT, 'tasks', 'list', archived ? 'all' : 'active'] as const,
+    detail: (id: string) => [ROOT, 'tasks', 'detail', id] as const,
+  },
+  incidents: {
+    all: [ROOT, 'incidents'] as const,
+    list: () => [ROOT, 'incidents', 'list'] as const,
+    detail: (id: string) => [ROOT, 'incidents', 'detail', id] as const,
   },
   notes: {
     all: [ROOT, 'notes'] as const,
@@ -41,11 +48,11 @@ export const queryKeys = {
 } as const;
 
 export type CompletionsListKey = ReturnType<typeof queryKeys.completions.list>;
-export type PlanWeekKey = ReturnType<typeof queryKeys.plan.week>;
 
 export const mutationKeys = {
   signOff: [ROOT, 'signOff'] as const,
   undoSignOff: [ROOT, 'undoSignOff'] as const,
-  plan: [ROOT, 'planMutation'] as const,
+  tasks: [ROOT, 'taskMutation'] as const,
+  incidents: [ROOT, 'incidentMutation'] as const,
   notes: [ROOT, 'notesMutation'] as const,
 } as const;

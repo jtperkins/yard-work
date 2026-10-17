@@ -77,7 +77,7 @@ export default tseslint.config(
                 '**/functions/**',
               ],
               message:
-                'src/shared must not import app or server code (catalog JSON in data/ is fine).',
+                'src/shared must not import app or server code.',
             },
           ],
         },

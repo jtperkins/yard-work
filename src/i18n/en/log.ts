@@ -5,7 +5,6 @@ const log = {
 
   'filters.label': 'Filter the log',
   'filters.everyone': 'Everyone',
-  'filters.adHoc': 'Ad-hoc work',
   'filters.rangeError': 'The end date is before the start date.',
 
   summary_one: '{count} sign-off',
@@ -34,13 +33,12 @@ const log = {
 
   'csv.date': 'Date',
   'csv.task': 'Task',
-  'csv.category': 'Category',
   'csv.doneBy': 'Done by',
   'csv.signedBy': 'Signed by',
+  'csv.partial': 'Partial',
   'csv.note': 'Note',
   'csv.taskId': 'Task ID',
   'csv.loggedAt': 'Logged at (UTC)',
-  'csv.adHoc': 'Ad-hoc',
 
   loadError: 'Couldn’t load the log.',
 };

@@ -2,28 +2,28 @@ import { renderHook, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { createFakeApi, createTestQueryClient } from '../../api/test-utils';
-import { getCatalog } from '../../domain/catalog';
+import { makeOneOff, makeTask } from '../../domain/test-fixtures';
 import type { TaskStatus } from '../../domain/schedule';
 import type { Lang } from '../../i18n';
 import { RequireAuth } from './RequireAuth';
 import { SignInCta } from './SignInCta';
-import { formatMonthRanges, useTaskText } from './taskText';
+import { useTaskText } from './taskText';
 import { renderScreen, TestProviders } from './test-utils';
 
 describe('SignInCta', () => {
   it('links to /login with the current location as `next`', () => {
-    renderScreen(<SignInCta />, { path: '/week/2026-10-05?x=1' });
+    renderScreen(<SignInCta />, { path: '/tasks/chapia?x=1' });
     expect(screen.getByRole('link', { name: 'Sign in to sign off' })).toHaveAttribute(
       'href',
-      '/login?next=%2Fweek%2F2026-10-05%3Fx%3D1',
+      '/login?next=%2Ftasks%2Fchapia%3Fx%3D1',
     );
   });
 
   it('accepts a label and explicit return path', () => {
-    renderScreen(<SignInCta label="Sign in to plan" returnTo="/week" />);
+    renderScreen(<SignInCta label="Sign in to plan" returnTo="/tasks" />);
     expect(screen.getByRole('link', { name: 'Sign in to plan' })).toHaveAttribute(
       'href',
-      '/login?next=%2Fweek',
+      '/login?next=%2Ftasks',
     );
   });
 });
@@ -57,17 +57,6 @@ describe('RequireAuth', () => {
   });
 });
 
-describe('formatMonthRanges', () => {
-  it('compresses runs, including across the new year', () => {
-    expect(formatMonthRanges([12, 1, 2, 3, 4], 'en')).toBe('Dec–Apr');
-    expect(formatMonthRanges([3, 4], 'en')).toBe('Mar–Apr');
-    expect(formatMonthRanges([1, 3, 4, 6], 'en')).toBe('Jan, Mar–Apr, Jun');
-    expect(formatMonthRanges([12, 1, 2, 3, 4], 'es')).toMatch(/^dic–abr$/);
-    expect(formatMonthRanges([], 'en')).toBe('');
-    expect(formatMonthRanges([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'en')).toBe('');
-  });
-});
-
 describe('useTaskText', () => {
   function hook(lang: Lang = 'en') {
     const api = createFakeApi();
@@ -96,23 +85,25 @@ describe('useTaskText', () => {
       'Nov 16',
     );
     expect(text.dueText({ ...base, state: 'never' }, today)).toBe('Never done — due now');
-    expect(text.dueText({ ...base, state: 'dormant', nextDue: '2026-12-01' }, today)).toBe(
-      'Out of season until Dec 1',
+    expect(text.dueText({ ...base, state: 'done', lastDone: '2026-10-05' }, today)).toBe(
+      'Done 2 days ago',
     );
   });
 
-  it('describes cadence, season and last done', () => {
+  it('describes intervals, one-offs and last done', () => {
     const text = hook();
-    const { taskById } = getCatalog();
-    expect(text.frequencyText(taskById.get('rust-inspection')!)).toBe('Every 30 days');
-    expect(text.frequencyText(taskById.get('daily-cat-care')!)).toBe('Every day');
-    expect(text.activeText(taskById.get('repaint-metal')!)).toBe('Active Dec–Apr');
-    expect(text.activeText(taskById.get('rust-inspection')!)).toBe('');
+    const every = (count: number, unit: 'day' | 'week' | 'month') =>
+      text.frequencyText(makeTask({ id: 'x', intervalCount: count, intervalUnit: unit }));
+    expect(every(14, 'day')).toBe('Every 14 days');
+    expect(every(1, 'day')).toBe('Every day');
+    expect(every(2, 'week')).toBe('Every 2 weeks');
+    expect(every(6, 'month')).toBe('Every 6 months');
+    expect(text.frequencyText(makeOneOff('x'))).toBe('One-off');
+    expect(text.frequencyText(makeOneOff('x', '2026-10-30'))).toBe('One-off · due Oct 30');
     expect(text.lastDoneText({ ...base, lastDone: '2026-10-04', lastDoneBy: 'Luis' }, today)).toBe(
       'Last done 3 days ago by Luis',
     );
     expect(text.lastDoneText(base, today)).toBe('Never done');
-    expect(text.categoryColor('lawn')).toBe('cat-lawn');
   });
 
   it('speaks Spanish', () => {
@@ -121,6 +112,10 @@ describe('useTaskText', () => {
       '1 día de atraso',
     );
     expect(text.lastDoneText({ ...base, lastDone: today }, today)).toBe('Última vez hoy');
-    expect(text.categoryLabel('lawn')).toBe('Zacate');
+    expect(text.frequencyText(makeTask({ id: 'x', intervalCount: 2, intervalUnit: 'week' }))).toBe(
+      'Cada 2 semanas',
+    );
+    expect(text.taskName(makeTask({ id: 'x', title: 'Mow', titleEs: 'Chapia' }))).toBe('Chapia');
+    expect(text.taskName(makeTask({ id: 'x', title: 'Mow', titleEs: null }))).toBe('Mow');
   });
 });

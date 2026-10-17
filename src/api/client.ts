@@ -15,22 +15,29 @@ import {
   completionSchema,
   completionsResSchema,
   meSchema,
+  incidentFileSchema,
+  incidentResSchema,
+  incidentsResSchema,
   noteSchema,
   notesResSchema,
   okResSchema,
-  planItemSchema,
-  planResSchema,
+  taskResSchema,
+  tasksResSchema,
   type Completion,
   type CompletionsQuery,
   type CreateCompletionReq,
+  type CreateIncidentReq,
   type CreateNoteReq,
-  type CreatePlanItemReq,
+  type IncidentFile,
+  type IncidentRes,
+  type IncidentsRes,
   type LoginReq,
   type Me,
   type Note,
   type OkRes,
-  type PlanItem,
-  type UpdatePlanItemReq,
+  type Task,
+  type TaskInput,
+  type UpdateTaskReq,
 } from '../shared/api-schemas';
 import { ApiRequestError } from './errors';
 
@@ -55,10 +62,17 @@ export interface ApiClient {
   createCompletion(req: CreateCompletionReq): Promise<Completion>;
   deleteCompletion(id: string): Promise<OkRes>;
 
-  getPlan(weekStart: string, signal?: AbortSignal): Promise<PlanItem[]>;
-  createPlanItem(req: CreatePlanItemReq): Promise<PlanItem>;
-  updatePlanItem(id: string, patch: UpdatePlanItemReq): Promise<PlanItem>;
-  deletePlanItem(id: string): Promise<OkRes>;
+  listTasks(options?: { archived?: boolean }, signal?: AbortSignal): Promise<Task[]>;
+  getTask(id: string, signal?: AbortSignal): Promise<Task>;
+  createTask(req: TaskInput): Promise<Task>;
+  updateTask(id: string, patch: UpdateTaskReq): Promise<Task>;
+
+  listIncidents(signal?: AbortSignal): Promise<IncidentsRes['incidents']>;
+  getIncident(id: string, signal?: AbortSignal): Promise<IncidentRes>;
+  createIncident(req: CreateIncidentReq): Promise<IncidentRes>;
+  deleteIncident(id: string): Promise<OkRes>;
+  /** Uploads one file as the raw request body. `mediaType` is what the server checks. */
+  uploadIncidentFile(incidentId: string, file: File, mediaType: string): Promise<IncidentFile>;
 
   listNotes(signal?: AbortSignal): Promise<Note[]>;
   createNote(req: CreateNoteReq): Promise<Note>;
@@ -72,6 +86,8 @@ interface RequestSpec<S extends z.ZodType> {
   path: string;
   schema: S;
   body?: unknown;
+  /** Sent as is (not JSON) with these extra headers, e.g. a file upload. */
+  raw?: { body: BodyInit; headers: Record<string, string> };
   query?: Record<string, string | undefined>;
   signal?: AbortSignal | undefined;
   /** Skip `onUnauthorized` (login: a 401 there means "wrong code", not "session expired"). */
@@ -111,6 +127,10 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     if (spec.body !== undefined) {
       headers['content-type'] = 'application/json';
       init.body = JSON.stringify(spec.body);
+    }
+    if (spec.raw) {
+      Object.assign(headers, spec.raw.headers);
+      init.body = spec.raw.body;
     }
 
     let res: Response;
@@ -180,27 +200,68 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     deleteCompletion: (id) =>
       request({ method: 'DELETE', path: `/api/completions/${encode(id)}`, schema: okResSchema }),
 
-    getPlan: async (weekStart, signal) =>
+    listTasks: async (options = {}, signal) =>
       (
         await request({
           method: 'GET',
-          path: '/api/plan',
-          schema: planResSchema,
-          query: { week: weekStart },
+          path: '/api/tasks',
+          schema: tasksResSchema,
+          query: { archived: options.archived ? '1' : undefined },
           signal,
         })
-      ).items,
-    createPlanItem: (req) =>
-      request({ method: 'POST', path: '/api/plan', schema: planItemSchema, body: req }),
-    updatePlanItem: (id, patch) =>
+      ).tasks,
+    getTask: async (id, signal) =>
+      (
+        await request({
+          method: 'GET',
+          path: `/api/tasks/${encode(id)}`,
+          schema: taskResSchema,
+          signal,
+        })
+      ).task,
+    createTask: async (req) =>
+      (await request({ method: 'POST', path: '/api/tasks', schema: taskResSchema, body: req }))
+        .task,
+    updateTask: async (id, patch) =>
+      (
+        await request({
+          method: 'PATCH',
+          path: `/api/tasks/${encode(id)}`,
+          schema: taskResSchema,
+          body: patch,
+        })
+      ).task,
+
+    listIncidents: async (signal) =>
+      (
+        await request({
+          method: 'GET',
+          path: '/api/incidents',
+          schema: incidentsResSchema,
+          signal,
+        })
+      ).incidents,
+    getIncident: (id, signal) =>
       request({
-        method: 'PATCH',
-        path: `/api/plan/${encode(id)}`,
-        schema: planItemSchema,
-        body: patch,
+        method: 'GET',
+        path: `/api/incidents/${encode(id)}`,
+        schema: incidentResSchema,
+        signal,
       }),
-    deletePlanItem: (id) =>
-      request({ method: 'DELETE', path: `/api/plan/${encode(id)}`, schema: okResSchema }),
+    createIncident: (req) =>
+      request({ method: 'POST', path: '/api/incidents', schema: incidentResSchema, body: req }),
+    deleteIncident: (id) =>
+      request({ method: 'DELETE', path: `/api/incidents/${encode(id)}`, schema: okResSchema }),
+    uploadIncidentFile: (incidentId, file, mediaType) =>
+      request({
+        method: 'POST',
+        path: `/api/incidents/${encode(incidentId)}/files`,
+        schema: incidentFileSchema,
+        raw: {
+          body: file,
+          headers: { 'content-type': mediaType, 'x-file-name': encode(file.name) },
+        },
+      }),
 
     listNotes: async (signal) =>
       (await request({ method: 'GET', path: '/api/notes', schema: notesResSchema, signal })).notes,
